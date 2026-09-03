@@ -46,14 +46,6 @@ npm run lint
 npm run build
 ```
 
-## Configuration (optional)
-
-| Variable | Purpose |
-| --- | --- |
-| `KYC_SESSION_SECRET` | HMAC key for the session cookie. Dev fallback when unset; required in production. |
-| `PII_VAULT_KEY` | Key the sandbox vault derives synthetic SSNs from. Same rule. |
-| `KYC_SANDBOX_IDP` | The pick-an-identity sign-in is dev-only. Set to `enabled` to allow it on a production build. |
-
 ## Layout
 
 ```
