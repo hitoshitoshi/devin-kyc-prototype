@@ -18,6 +18,7 @@ export interface SelectProps<T extends string> {
   label?: string;
   "aria-label"?: string;
   align?: "start" | "end";
+  disabled?: boolean;
   className?: string;
   menuClassName?: string;
 }
@@ -30,6 +31,7 @@ export function Select<T extends string>({
   label,
   "aria-label": ariaLabel,
   align = "start",
+  disabled = false,
   className,
   menuClassName,
 }: SelectProps<T>) {
@@ -141,9 +143,10 @@ export function Select<T extends string>({
           aria-expanded={open}
           aria-controls={listId}
           aria-label={ariaLabel}
+          disabled={disabled}
           onClick={() => (open ? close() : openMenu())}
           onKeyDown={onButtonKeyDown}
-          className="flex items-center gap-1.5 pr-1.5 pl-2 font-medium text-zinc-800 outline-none focus-visible:bg-zinc-50 dark:text-zinc-100 dark:focus-visible:bg-zinc-800/60"
+          className="flex items-center gap-1.5 pr-1.5 pl-2 font-medium text-zinc-800 outline-none focus-visible:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-zinc-100 dark:focus-visible:bg-zinc-800/60"
         >
           {selected?.icon && <span className="flex shrink-0 items-center text-zinc-500">{selected.icon}</span>}
           <span className="truncate">{selected?.label}</span>

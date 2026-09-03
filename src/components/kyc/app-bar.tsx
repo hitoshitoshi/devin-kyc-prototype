@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Moon, Sun, Landmark } from "lucide-react";
+import { LogOut, Moon, Sun, Landmark } from "lucide-react";
 import { RoleSwitcher } from "@/components/kyc/role-switcher";
 import { Button } from "@/components/ui/button";
+import { signOut } from "@/app/internal/sign-in/actions";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -50,6 +51,11 @@ export function AppBar() {
       <div className="flex items-center gap-2">
         <RoleSwitcher />
         <ThemeToggle />
+        <form action={signOut}>
+          <Button variant="ghost" size="xs" type="submit" aria-label="Sign out" title="Sign out" className="px-1.5">
+            <LogOut className="size-3.5" />
+          </Button>
+        </form>
       </div>
     </header>
   );

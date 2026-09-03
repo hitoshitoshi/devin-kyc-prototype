@@ -1,0 +1,34 @@
+---
+name: testing-kyc-console
+description: How to run and browser-test the KYC Review Console (Next.js) in devin-kyc-prototype — dev server pitfalls, seed records, and stable selectors/test IDs.
+---
+
+# Testing the KYC Review Console
+
+## Run
+- `cd /home/ubuntu/repos/devin-kyc-prototype && npm run dev -- -p 3000`; app at http://localhost:3000 (redirects to `/internal/kyc`, then to `/internal/sign-in?next=...` until a session cookie exists).
+- Sign-in is a sandbox IdP: click `data-testid="sign-in-priya.natarajan"` (starts as Tier-1) or `sign-in-marcus.ellison` (starts as Compliance Lead). Both identities are granted both roles, so the header role switcher works either way. Sign out via the header `aria-label="Sign out"` button. No env vars needed in dev (`KYC_SESSION_SECRET` / `PII_VAULT_KEY` have dev fallbacks).
+- State is in-memory seed data (12 applicants) and resets on hard refresh; the session cookie (`kyc_session`, 8h) persists.
+- If the page renders but nothing is interactive (search `/` does nothing, chunk 404s for `main-app.js`/`page.js`, or "Attempted import error" in the console), the `.next` dir is likely stale from a previous branch. Fix: kill the dev server, `rm -rf .next`, restart. Confirm hydration by checking the Next.js dev badge appears bottom-left and the search input responds.
+
+## Useful seed records
+- `APP-7F3A21` Daniel Okonkwo — High risk, Pending, SSN last-4 `4819` (use for RBAC + SSN reveal + checklist). Full SSNs are derived server-side from `PII_VAULT_KEY`; assert the `\d{3}-\d{2}-4819` shape, not a fixed value.
+- `APP-E8C412` Robert Hale — document expired 2024-02-27: `checklist-expirationValid` is disabled with "Document expired …".
+- `APP-6B2F58` Fatima Al-Rashid — Medium, Pending (Tier-1 can approve/reject).
+- `APP-E8C412` Robert Hale, `APP-9E04F7` Marcus Whitfield — Medium, Pending (spare records for escalate/approve).
+- `APP-B31D6E` Aleksandr Volkov — email `a.volkov.1984@yandex.com` (good search target).
+
+## Selectors / test IDs
+- Queue: `input[aria-label="Search applications"]`, `select[aria-label="Filter by risk tier"]`, `select[aria-label="Filter by status"]`, rows `data-testid="queue-row-<APP-ID>"`.
+- Header role: custom listbox `button[aria-label="Active role"]` (role=combobox) → options in `ul[role=listbox]`. Switching calls the `switchRole` server action (brief disabled state), then the actor chip shows Priya Natarajan / Marcus Ellison.
+- Detail: `console-app-id`, `ssn-value`, `ssn-reveal`, `checklist-tamperCheckPassed|facialMatchVerified|expirationValid`, `action-approve|reject|escalate`, `confirm-approve|reject|escalate`, `reject-continue`.
+- Audit drawer: `audit-drawer-tab` (collapsed at 32px; click to expand to 280px), rows `audit-row-<ACTION>`. Metadata column is truncated on screen — full JSON is in the `<code title="...">` attribute. *Copy JSON* writes a minimized export (`ip` → `[redacted]`, `redactedFields` array) and appends `LEDGER_EXPORTED`.
+
+## Gotchas
+- `VIEWED_RECORD` is deduped only within a 2s window per (app, actor); re-opening a record later legitimately adds another one.
+- Escalating/rejecting/approving as Tier-1 makes the decision final for that role (buttons disabled, checklist read-only) — use a fresh Pending record per decision type.
+- Escalate reassigns the record to Marcus Ellison (Compliance Lead); the `STATUS_UPDATED` event carries `reassignedFrom`/`reassignedTo`.
+- Hovering with a single `mouse_move` sometimes doesn't trigger the CSS `group-hover` tooltip; nudge the mouse a few px and re-hover.
+
+## Devin Secrets Needed
+None.

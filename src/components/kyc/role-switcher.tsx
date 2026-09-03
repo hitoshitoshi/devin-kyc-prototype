@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ShieldCheck, UserRound } from "lucide-react";
 import { ROLES, ROLE_ORDER, useRole } from "@/lib/auth/rbac";
@@ -15,9 +16,20 @@ const ROLE_OPTIONS: SelectOption<UserRole>[] = ROLE_ORDER.map((r) => ({
 }));
 
 export function RoleSwitcher() {
-  const { role, definition, setRole } = useRole();
+  const { role, definition, grants, setRole } = useRole();
   const params = useParams<{ id?: string }>();
+  const [pending, setPending] = useState(false);
   const isAdmin = definition.level === "Admin";
+  const options = useMemo(() => ROLE_OPTIONS.filter((o) => grants.includes(o.value)), [grants]);
+
+  const change = async (next: UserRole) => {
+    setPending(true);
+    try {
+      await setRole(next, params?.id);
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div className="flex items-center gap-2">
@@ -36,8 +48,9 @@ export function RoleSwitcher() {
         aria-label="Active role"
         label="Role"
         value={role}
-        options={ROLE_OPTIONS}
-        onChange={(r) => setRole(r, params?.id)}
+        options={options}
+        onChange={(r) => void change(r)}
+        disabled={pending || options.length < 2}
         align="end"
       />
     </div>

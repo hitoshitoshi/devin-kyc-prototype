@@ -4,6 +4,7 @@ import { Check, CircleAlert, CircleCheck, Square, SquareCheck } from "lucide-rea
 import type { Application, ChecklistKey } from "@/lib/types";
 import { useKyc } from "@/lib/state/kyc-context";
 import { cn, formatDate, isExpired, normalize } from "@/lib/utils";
+import { checklistConstraint } from "@/lib/checklist";
 import { Badge } from "@/components/ui/badge";
 import { IdentityCard } from "@/components/kyc/identity-card";
 import { PaneHeader } from "@/components/kyc/applicant-pane";
@@ -149,6 +150,8 @@ export function DocumentPane({ app, locked }: { app: Application; locked: boolea
           <ul className="divide-y divide-zinc-200 rounded border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
             {CHECKLIST_ITEMS.map((item) => {
               const checked = app.checklist[item.key];
+              const constraint = checklistConstraint(app, item.key);
+              const blocked = !checked && !constraint.allowed;
               const warn = item.key === "expirationValid" && checked && expired;
               return (
                 <li key={item.key}>
@@ -156,7 +159,9 @@ export function DocumentPane({ app, locked }: { app: Application; locked: boolea
                     type="button"
                     role="checkbox"
                     aria-checked={checked}
-                    disabled={locked}
+                    aria-disabled={blocked || undefined}
+                    disabled={locked || blocked}
+                    title={blocked ? constraint.reason : undefined}
                     onClick={() => toggleChecklist(app.id, item.key)}
                     data-testid={`checklist-${item.key}`}
                     className={cn(
@@ -175,9 +180,9 @@ export function DocumentPane({ app, locked }: { app: Application; locked: boolea
                       </span>
                       <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{item.hint}</span>
                     </span>
-                    {warn && (
+                    {(warn || blocked) && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-red-600 dark:text-red-400">
-                        <CircleAlert className="size-3" /> Document is expired
+                        <CircleAlert className="size-3" /> {blocked ? constraint.reason : "Document is expired"}
                       </span>
                     )}
                     {checked && !warn && <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />}

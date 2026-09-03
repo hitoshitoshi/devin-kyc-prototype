@@ -72,4 +72,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   NOTE_ADDED: "Note added",
   STATUS_UPDATED: "Status updated",
   ROLE_SWITCHED: "Role switched",
+  LEDGER_EXPORTED: "Ledger exported",
 };

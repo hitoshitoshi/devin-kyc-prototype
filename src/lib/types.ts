@@ -35,7 +35,8 @@ export type AuditAction =
   | "CHECKLIST_UPDATED"
   | "NOTE_ADDED"
   | "STATUS_UPDATED"
-  | "ROLE_SWITCHED";
+  | "ROLE_SWITCHED"
+  | "LEDGER_EXPORTED";
 
 export type DocumentType = "PASSPORT" | "DRIVERS_LICENSE";
 

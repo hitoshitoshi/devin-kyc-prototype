@@ -13,7 +13,9 @@ import {
 import { logAuditEvent, registerAuditSink } from "@/lib/audit/logger";
 import { evaluatePermission, ROLES, RoleContext, type RoleContextValue } from "@/lib/auth/rbac";
 import { buildSeedApplications, buildSeedAuditEvents } from "@/lib/data/seed";
-import { revealSsn as revealSsnAction } from "@/app/internal/kyc/actions";
+import { revealSsn as revealSsnAction, switchRole as switchRoleAction } from "@/app/internal/kyc/actions";
+import { checklistConstraint } from "@/lib/checklist";
+import { minimizeForExport } from "@/lib/audit/export";
 import type {
   Application,
   ApplicationStatus,
@@ -24,8 +26,14 @@ import type {
   UserRole,
 } from "@/lib/types";
 
+export interface SessionSnapshot {
+  role: UserRole;
+  grants: readonly UserRole[];
+}
+
 interface KycState {
   role: UserRole;
+  grants: readonly UserRole[];
   applications: Application[];
   auditEvents: AuditEvent[];
 }
@@ -74,17 +82,21 @@ interface KycContextValue {
   viewRecord: (id: string) => void;
   /** Fetches the full SSN from the server and records `PII_UNMASKED`. */
   revealSsn: (id: string) => Promise<string>;
-  toggleChecklist: (id: string, key: ChecklistKey) => void;
+  /** Returns false when the item cannot be checked (e.g. expired document). */
+  toggleChecklist: (id: string, key: ChecklistKey) => boolean;
   addNote: (id: string, body: string) => void;
   decide: (id: string, input: DecisionInput) => void;
+  /** Minimized ledger export for one application; records `LEDGER_EXPORTED`. */
+  exportLedger: (id: string) => string;
 }
 
 const KycContext = createContext<KycContextValue | null>(null);
 
-function buildInitialState(seedAnchor: number): KycState {
+function buildInitialState({ seedAnchor, session }: { seedAnchor: number; session: SessionSnapshot }): KycState {
   const applications = buildSeedApplications(seedAnchor);
   return {
-    role: "TIER1_ANALYST",
+    role: session.role,
+    grants: session.grants,
     applications,
     auditEvents: buildSeedAuditEvents(applications),
   };
@@ -92,8 +104,16 @@ function buildInitialState(seedAnchor: number): KycState {
 
 let noteSequence = 2000;
 
-export function KycProvider({ children, seedAnchor }: { children: ReactNode; seedAnchor: number }) {
-  const [state, dispatch] = useReducer(reducer, seedAnchor, buildInitialState);
+export function KycProvider({
+  children,
+  seedAnchor,
+  session,
+}: {
+  children: ReactNode;
+  seedAnchor: number;
+  session: SessionSnapshot;
+}) {
+  const [state, dispatch] = useReducer(reducer, { seedAnchor, session }, buildInitialState);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -104,16 +124,19 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
   const actorFor = useCallback((role: UserRole) => ROLES[role].actor, []);
 
   const setRole = useCallback(
-    (next: UserRole, applicationId?: string) => {
+    async (requested: UserRole, applicationId?: string) => {
       const prev = stateRef.current.role;
-      if (prev === next) return;
-      dispatch({ type: "SET_ROLE", role: next });
-      logAuditEvent("ROLE_SWITCHED", actorFor(next), next, {
+      if (prev === requested) return prev;
+      const granted = await switchRoleAction(requested);
+      if (granted === prev) return prev;
+      dispatch({ type: "SET_ROLE", role: granted });
+      logAuditEvent("ROLE_SWITCHED", actorFor(granted), granted, {
         applicationId,
         from: prev,
-        to: next,
+        to: granted,
         previousActor: actorFor(prev),
       });
+      return granted;
     },
     [actorFor],
   );
@@ -141,7 +164,7 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
   const revealSsn = useCallback(
     async (id: string) => {
       const { role } = stateRef.current;
-      const { ssn, disclosedAt } = await revealSsnAction(id, role);
+      const { ssn, disclosedAt } = await revealSsnAction(id);
       logAuditEvent("PII_UNMASKED", actorFor(role), role, {
         applicationId: id,
         field: "ssn",
@@ -181,8 +204,9 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
       const { role } = stateRef.current;
       const actor = actorFor(role);
       const app = getApplication(id);
-      if (!app) return;
+      if (!app) return false;
       const next = !app.checklist[key];
+      if (next && !checklistConstraint(app, key).allowed) return false;
       const start = beginReviewIfPending(app, actor, role);
       dispatch({
         type: "UPDATE_APPLICATION",
@@ -197,6 +221,7 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
         item: key,
         checked: next,
       });
+      return true;
     },
     [actorFor, beginReviewIfPending, getApplication],
   );
@@ -247,6 +272,7 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
 
       const decidedAt = new Date().toISOString();
       const from = app.status;
+      const routedTo = input.status === "Escalated" ? ROLES.COMPLIANCE_LEAD.actor : null;
       const decisionNote: ReviewNote | null = input.note?.trim()
         ? {
             id: `N-${++noteSequence}`,
@@ -262,7 +288,7 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
         updater: (a) => ({
           ...a,
           status: input.status,
-          assignedReviewer: a.assignedReviewer ?? actor,
+          assignedReviewer: routedTo ?? a.assignedReviewer ?? actor,
           decision: {
             outcome: input.status,
             decidedBy: actor,
@@ -288,10 +314,26 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
         to: input.status,
         ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
         ...(permission.override ? { override: true } : {}),
+        ...(routedTo ? { reassignedFrom: app.assignedReviewer, reassignedTo: routedTo } : {}),
         riskTier: app.risk.tier,
       });
     },
     [actorFor, getApplication],
+  );
+
+  const exportLedger = useCallback(
+    (id: string) => {
+      const { role, auditEvents } = stateRef.current;
+      const events = auditEvents.filter((e) => e.applicationId === id);
+      logAuditEvent("LEDGER_EXPORTED", actorFor(role), role, {
+        applicationId: id,
+        eventCount: events.length,
+        destination: "clipboard",
+        minimized: true,
+      });
+      return JSON.stringify(minimizeForExport(events), null, 2);
+    },
+    [actorFor],
   );
 
   const metrics = useMemo<QueueMetrics>(() => {
@@ -321,9 +363,10 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
       definition: ROLES[state.role],
       actor: ROLES[state.role].actor,
       setRole,
+      grants: state.grants,
       can: (app, action) => evaluatePermission(state.role, app, action),
     }),
-    [state.role, setRole],
+    [state.role, state.grants, setRole],
   );
 
   const value = useMemo<KycContextValue>(
@@ -338,8 +381,9 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
       toggleChecklist,
       addNote,
       decide,
+      exportLedger,
     }),
-    [state.applications, state.auditEvents, metrics, eventsFor, viewRecord, revealSsn, toggleChecklist, addNote, decide],
+    [state.applications, state.auditEvents, metrics, eventsFor, viewRecord, revealSsn, toggleChecklist, addNote, decide, exportLedger],
   );
 
   return (

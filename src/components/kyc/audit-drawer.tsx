@@ -5,6 +5,7 @@ import { ArrowDownWideNarrow, ArrowUpWideNarrow, Copy, ScrollText } from "lucide
 import type { AuditAction, AuditEvent } from "@/lib/types";
 import { AUDIT_ACTION_LABELS } from "@/lib/audit/logger";
 import { ROLES } from "@/lib/auth/rbac";
+import { useKyc } from "@/lib/state/kyc-context";
 import { cn, formatTimestamp } from "@/lib/utils";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,9 +20,11 @@ const ACTION_TONE: Record<AuditAction, BadgeTone> = {
   NOTE_ADDED: "blue",
   STATUS_UPDATED: "amber",
   ROLE_SWITCHED: "violet",
+  LEDGER_EXPORTED: "red",
 };
 
-export function AuditDrawer({ events }: { events: AuditEvent[] }) {
+export function AuditDrawer({ applicationId, events }: { applicationId: string; events: AuditEvent[] }) {
+  const { exportLedger } = useKyc();
   const [open, setOpen] = useState(false);
   const [newestFirst, setNewestFirst] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -31,7 +34,7 @@ export function AuditDrawer({ events }: { events: AuditEvent[] }) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(events, null, 2));
+      await navigator.clipboard.writeText(exportLedger(applicationId));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -66,7 +69,13 @@ export function AuditDrawer({ events }: { events: AuditEvent[] }) {
               {newestFirst ? <ArrowDownWideNarrow className="size-3" /> : <ArrowUpWideNarrow className="size-3" />}
               {newestFirst ? "Newest first" : "Oldest first"}
             </Button>
-            <Button variant="ghost" size="xs" onClick={copy} className="text-[11px]">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={copy}
+              className="text-[11px]"
+              title="Copies a data-minimized export (IPs and contact fields redacted); the export itself is logged."
+            >
               <Copy className="size-3" />
               {copied ? "Copied" : "Copy JSON"}
             </Button>

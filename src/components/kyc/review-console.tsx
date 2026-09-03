@@ -150,7 +150,7 @@ export function ReviewConsole({ id }: { id: string }) {
         <DecisionPane app={app} onAction={setAction} />
       </div>
 
-      <AuditDrawer events={eventsFor(app.id)} />
+      <AuditDrawer applicationId={app.id} events={eventsFor(app.id)} />
 
       <DecisionModals app={app} action={action} override={override} onClose={closeModal} onConfirm={confirm} />
     </div>
