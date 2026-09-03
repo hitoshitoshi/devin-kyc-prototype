@@ -34,16 +34,25 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 export function ApplicantPane({ app }: { app: Application }) {
-  const { unmaskPii } = useKyc();
-  const [revealed, setRevealed] = useState(false);
+  const { revealSsn } = useKyc();
+  const [ssn, setSsn] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const revealed = ssn !== null;
   const { applicant } = app;
   const screening = applicant.screening;
   const screeningClear = !screening.pep && !screening.sanctions && !screening.adverseMedia;
 
-  const toggleReveal = () => {
-    const next = !revealed;
-    setRevealed(next);
-    if (next) unmaskPii(app.id, "ssn");
+  const toggleReveal = async () => {
+    if (revealed) {
+      setSsn(null);
+      return;
+    }
+    setPending(true);
+    try {
+      setSsn(await revealSsn(app.id));
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -65,12 +74,13 @@ export function ApplicantPane({ app }: { app: Application }) {
                 className={cn("font-mono text-xs tabular-nums", revealed && "text-red-700 dark:text-red-400")}
                 data-testid="ssn-value"
               >
-                {revealed ? formatSsn(applicant.ssn) : maskSsn(applicant.ssn)}
+                {ssn ? formatSsn(ssn) : maskSsn(applicant.ssnLast4)}
               </span>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={toggleReveal}
+                disabled={pending}
                 aria-pressed={revealed}
                 className="-my-1 text-[11px]"
                 data-testid="ssn-reveal"

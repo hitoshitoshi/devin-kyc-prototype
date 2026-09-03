@@ -101,10 +101,12 @@ export function Select<T extends string>({
         commit(active);
         break;
       case "Escape":
-      case "Tab":
         e.preventDefault();
         e.stopPropagation();
         close();
+        break;
+      case "Tab":
+        setOpen(false);
         break;
     }
   };

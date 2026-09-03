@@ -13,6 +13,7 @@ import {
 import { logAuditEvent, registerAuditSink } from "@/lib/audit/logger";
 import { evaluatePermission, ROLES, RoleContext, type RoleContextValue } from "@/lib/auth/rbac";
 import { buildSeedApplications, buildSeedAuditEvents } from "@/lib/data/seed";
+import { revealSsn as revealSsnAction } from "@/app/internal/kyc/actions";
 import type {
   Application,
   ApplicationStatus,
@@ -71,7 +72,8 @@ interface KycContextValue {
   getApplication: (id: string) => Application | undefined;
   eventsFor: (id: string) => AuditEvent[];
   viewRecord: (id: string) => void;
-  unmaskPii: (id: string, field: string) => void;
+  /** Fetches the full SSN from the server and records `PII_UNMASKED`. */
+  revealSsn: (id: string) => Promise<string>;
   toggleChecklist: (id: string, key: ChecklistKey) => void;
   addNote: (id: string, body: string) => void;
   decide: (id: string, input: DecisionInput) => void;
@@ -136,14 +138,17 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
     [actorFor],
   );
 
-  const unmaskPii = useCallback(
-    (id: string, field: string) => {
+  const revealSsn = useCallback(
+    async (id: string) => {
       const { role } = stateRef.current;
+      const { ssn, disclosedAt } = await revealSsnAction(id, role);
       logAuditEvent("PII_UNMASKED", actorFor(role), role, {
         applicationId: id,
-        field,
+        field: "ssn",
         justification: "manual-review",
+        disclosedAt,
       });
+      return ssn;
     },
     [actorFor],
   );
@@ -329,12 +334,12 @@ export function KycProvider({ children, seedAnchor }: { children: ReactNode; see
       getApplication: (id) => state.applications.find((a) => a.id === id),
       eventsFor,
       viewRecord,
-      unmaskPii,
+      revealSsn,
       toggleChecklist,
       addNote,
       decide,
     }),
-    [state.applications, state.auditEvents, metrics, eventsFor, viewRecord, unmaskPii, toggleChecklist, addNote, decide],
+    [state.applications, state.auditEvents, metrics, eventsFor, viewRecord, revealSsn, toggleChecklist, addNote, decide],
   );
 
   return (

@@ -49,7 +49,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "NG",
         statedIncomeUsd: 245000,
         occupation: "Deputy Minister (former)",
-        ssn: "512-44-4819",
+        ssnLast4: "4819",
         ipAddress: "73.162.44.201",
         screening: {
           pep: true,
@@ -115,7 +115,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 132000,
         occupation: "Software Engineer",
-        ssn: "601-22-7734",
+        ssnLast4: "7734",
         ipAddress: "24.5.118.77",
         screening: {
           pep: false,
@@ -186,7 +186,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 410000,
         occupation: "Owner, Freight Brokerage",
-        ssn: "462-19-3382",
+        ssnLast4: "3382",
         ipAddress: "104.28.213.9",
         screening: {
           pep: false,
@@ -252,7 +252,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "RU",
         statedIncomeUsd: 89000,
         occupation: "Import/Export Consultant",
-        ssn: "089-56-2210",
+        ssnLast4: "2210",
         ipAddress: "185.220.101.45",
         screening: {
           pep: false,
@@ -339,7 +339,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 96500,
         occupation: "Registered Nurse",
-        ssn: "255-70-1195",
+        ssnLast4: "1195",
         ipAddress: "68.51.203.14",
         screening: {
           pep: false,
@@ -416,7 +416,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 185000,
         occupation: "Day Trader",
-        ssn: "530-88-0021",
+        ssnLast4: "0021",
         ipAddress: "45.33.78.190",
         screening: {
           pep: false,
@@ -497,7 +497,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 71000,
         occupation: "Pharmacist",
-        ssn: "381-04-6620",
+        ssnLast4: "6620",
         ipAddress: "68.43.99.210",
         screening: {
           pep: false,
@@ -561,7 +561,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 48000,
         occupation: "Retired",
-        ssn: "004-38-9917",
+        ssnLast4: "9917",
         ipAddress: "71.174.6.88",
         screening: {
           pep: false,
@@ -624,7 +624,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "CN",
         statedIncomeUsd: 620000,
         occupation: "Managing Director",
-        ssn: "533-91-2048",
+        ssnLast4: "2048",
         ipAddress: "203.0.113.42",
         screening: {
           pep: false,
@@ -698,7 +698,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "US",
         statedIncomeUsd: 58000,
         occupation: "Marketing Coordinator",
-        ssn: "592-63-7781",
+        ssnLast4: "7781",
         ipAddress: "172.58.140.22",
         screening: {
           pep: false,
@@ -760,7 +760,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "GH",
         statedIncomeUsd: 340000,
         occupation: "Rideshare Driver",
-        ssn: "147-58-3306",
+        ssnLast4: "3306",
         ipAddress: "100.36.91.170",
         screening: {
           pep: false,
@@ -833,7 +833,7 @@ export function buildSeedApplications(anchor: number): Application[] {
         nationality: "BG",
         statedIncomeUsd: 52000,
         occupation: "Graduate Student",
-        ssn: "543-27-1108",
+        ssnLast4: "1108",
         ipAddress: "50.53.12.204",
         screening: {
           pep: false,

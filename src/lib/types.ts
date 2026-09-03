@@ -68,7 +68,8 @@ export interface Applicant {
   nationality: string;
   statedIncomeUsd: number;
   occupation: string;
-  ssn: string;
+  /** Only the last four digits are ever sent to the client; see `pii-vault.ts`. */
+  ssnLast4: string;
   ipAddress: string;
   screening: ScreeningResult;
 }

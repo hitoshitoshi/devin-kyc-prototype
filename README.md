@@ -34,7 +34,7 @@ src/
 
 | Compliance requirement | Low-code platform | This chassis |
 | --- | --- | --- |
-| **PII minimisation** | Fields are either visible or hidden; reveal is not an auditable act. | SSN rendered as `•••-••-4819`; the *Reveal* toggle is itself a `PII_UNMASKED` audit event with `{ field: "ssn" }`. |
+| **PII minimisation** | Fields are either visible or hidden; reveal is not an auditable act. | Only `ssnLast4` is shipped to the browser (`•••-••-4819`); the full value lives in a `server-only` vault and is disclosed through the `revealSsn` server action, which the client pairs with a `PII_UNMASKED { field: "ssn" }` audit event. |
 | **Four-eyes / tiered approval** | Role logic scattered across per-control visibility formulas. | One `ROLES` table + `evaluatePermission()`. Tier-1 cannot approve *High* risk (button disabled, tooltip explains why); Compliance Lead can decide escalated cases and override prior decisions — with the override recorded. |
 | **Immutable audit trail** | Connector-dependent logging, often best-effort. | Frozen event objects, monotonic IDs, structured metadata JSON, chronological ledger scoped per record and exportable (Copy JSON). |
 | **Structured decisions** | Free-text reason fields. | Rejection requires an enumerated reason code (`EXPIRED_DOCUMENT`, `UNREADABLE_SCAN`, `SUSPECTED_FRAUD`, `SANCTIONS_LIST`) behind a confirmation modal. |

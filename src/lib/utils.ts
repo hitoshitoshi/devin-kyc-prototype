@@ -49,9 +49,8 @@ export function formatUsd(n: number): string {
   }).format(n);
 }
 
-export function maskSsn(ssn: string): string {
-  const digits = ssn.replace(/\D/g, "");
-  return `•••-••-${digits.slice(-4)}`;
+export function maskSsn(last4: string): string {
+  return `•••-••-${last4}`;
 }
 
 export function formatSsn(ssn: string): string {
