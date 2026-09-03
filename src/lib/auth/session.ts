@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { UserRole } from "@/lib/types";
 import {
   SESSION_COOKIE,
@@ -40,8 +40,34 @@ export const SANDBOX_IDENTITIES: readonly OperatorIdentity[] = [
   },
 ];
 
+/**
+ * The sandbox IdP lets anyone pick an identity, so it is only available in
+ * development unless a deployment opts in explicitly (`KYC_SANDBOX_IDP=enabled`).
+ * A production build without the opt-in has no way to mint a session.
+ */
+export function sandboxIdpEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.KYC_SANDBOX_IDP === "enabled";
+}
+
 export function findIdentity(sub: string): OperatorIdentity | undefined {
   return SANDBOX_IDENTITIES.find((i) => i.sub === sub);
+}
+
+/**
+ * Rejects state-changing requests whose `Origin` does not match the serving
+ * host, independent of cookie `SameSite` behaviour and framework defaults.
+ */
+export async function assertSameOrigin(): Promise<void> {
+  const h = await headers();
+  const origin = h.get("origin");
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  let originHost: string | null = null;
+  try {
+    originHost = origin ? new URL(origin).host : null;
+  } catch {
+    originHost = null;
+  }
+  if (!originHost || !host || originHost !== host) throw new Error("Cross-origin request rejected");
 }
 
 /** Display name recorded as the audit actor for a session. */
@@ -54,7 +80,9 @@ export async function getSession(): Promise<SessionClaims | null> {
   return verifySession(store.get(SESSION_COOKIE)?.value);
 }
 
+/** For server actions: same-origin check plus a verified session. */
 export async function requireSession(): Promise<SessionClaims> {
+  await assertSameOrigin();
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");
   return session;

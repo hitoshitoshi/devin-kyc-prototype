@@ -1,7 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { clearSession, findIdentity, issueSession } from "@/lib/auth/session";
+import {
+  assertSameOrigin,
+  clearSession,
+  findIdentity,
+  issueSession,
+  sandboxIdpEnabled,
+} from "@/lib/auth/session";
 
 function safeNext(value: FormDataEntryValue | null): string {
   return typeof value === "string" && value.startsWith("/internal/") && !value.startsWith("/internal/sign-in")
@@ -10,6 +16,8 @@ function safeNext(value: FormDataEntryValue | null): string {
 }
 
 export async function signIn(formData: FormData): Promise<void> {
+  await assertSameOrigin();
+  if (!sandboxIdpEnabled()) throw new Error("Sandbox identity provider is disabled");
   const sub = formData.get("sub");
   const identity = typeof sub === "string" ? findIdentity(sub) : undefined;
   if (!identity) throw new Error("Unknown operator identity");
@@ -18,6 +26,7 @@ export async function signIn(formData: FormData): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  await assertSameOrigin();
   await clearSession();
   redirect("/internal/sign-in");
 }
