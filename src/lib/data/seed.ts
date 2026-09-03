@@ -34,6 +34,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: null,
       applicant: {
         legalName: "Daniel Okonkwo",
+        sex: "M",
         email: "d.okonkwo@protonmail.com",
         phone: "+1 (312) 555-0147",
         dateOfBirth: "1979-03-14",
@@ -100,6 +101,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.tier1,
       applicant: {
         legalName: "Emily Chen",
+        sex: "F",
         email: "emily.chen88@gmail.com",
         phone: "+1 (415) 555-0193",
         dateOfBirth: "1988-11-02",
@@ -169,6 +171,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.analystB,
       applicant: {
         legalName: "Marcus Whitfield",
+        sex: "M",
         email: "mwhitfield@whitfieldlogistics.co",
         phone: "+1 (713) 555-0121",
         dateOfBirth: "1971-07-22",
@@ -234,6 +237,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.lead,
       applicant: {
         legalName: "Aleksandr Volkov",
+        sex: "M",
         email: "a.volkov.1984@yandex.com",
         phone: "+1 (646) 555-0177",
         dateOfBirth: "1984-01-19",
@@ -321,6 +325,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.tier1,
       applicant: {
         legalName: "Grace Adeyemi",
+        sex: "F",
         email: "grace.adeyemi@outlook.com",
         phone: "+1 (404) 555-0108",
         dateOfBirth: "1992-05-30",
@@ -396,6 +401,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.analystB,
       applicant: {
         legalName: "Jordan Reyes",
+        sex: "M",
         email: "jreyes.2024@tempmail.io",
         phone: "+1 (702) 555-0166",
         dateOfBirth: "1999-09-09",
@@ -477,6 +483,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: null,
       applicant: {
         legalName: "Fatima Al-Rashid",
+        sex: "F",
         email: "fatima.alrashid@gmail.com",
         phone: "+1 (313) 555-0139",
         dateOfBirth: "1986-12-05",
@@ -540,6 +547,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.analystC,
       applicant: {
         legalName: "Robert Hale",
+        sex: "M",
         email: "rhale1954@aol.com",
         phone: "+1 (207) 555-0114",
         dateOfBirth: "1954-02-27",
@@ -601,6 +609,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.tier1,
       applicant: {
         legalName: "Lin Wei",
+        sex: "F",
         email: "lin.wei@pacificrimtrading.com",
         phone: "+1 (206) 555-0182",
         dateOfBirth: "1975-08-16",
@@ -674,6 +683,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: null,
       applicant: {
         legalName: "Samantha Ortiz",
+        sex: "F",
         email: "sam.ortiz@icloud.com",
         phone: "+1 (305) 555-0158",
         dateOfBirth: "1995-04-21",
@@ -736,6 +746,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: REVIEWERS.analystB,
       applicant: {
         legalName: "Kwame Mensah",
+        sex: "M",
         email: "kmensah@gmail.com",
         phone: "+1 (973) 555-0129",
         dateOfBirth: "1990-10-11",
@@ -808,6 +819,7 @@ export function buildSeedApplications(anchor: number): Application[] {
       assignedReviewer: null,
       applicant: {
         legalName: "Nadia Petrova",
+        sex: "F",
         email: "nadia.petrova@mail.com",
         phone: "+1 (503) 555-0171",
         dateOfBirth: "1997-06-30",

@@ -59,6 +59,7 @@ export interface ScreeningResult {
 
 export interface Applicant {
   legalName: string;
+  sex: "M" | "F";
   email: string;
   phone: string;
   dateOfBirth: string;

@@ -63,7 +63,7 @@ function buildMrz(doc: IdentityDocument, applicant: Applicant) {
   const dob = mrzDate(applicant.dateOfBirth);
   const exp = mrzDate(doc.expiresOn);
   const nat = ALPHA3[applicant.nationality] ?? alpha3;
-  const body = `${num}${checkDigit(num)}${nat}${dob}${checkDigit(dob)}M${exp}${checkDigit(exp)}${"<".repeat(14)}0`;
+  const body = `${num}${checkDigit(num)}${nat}${dob}${checkDigit(dob)}${applicant.sex}${exp}${checkDigit(exp)}${"<".repeat(14)}0`;
   return [line1, mrzPad(body + checkDigit(body), 44)];
 }
 
@@ -157,7 +157,7 @@ export function IdentityCard({ document: doc, applicant }: { document: IdentityD
               <Field label="Nationality" value={ALPHA3[applicant.nationality] ?? applicant.nationality} />
               <Field label="Date of birth" value={formatDate(applicant.dateOfBirth)} />
               <Field label="Date of issue" value={formatDate(doc.issuedOn)} />
-              <Field label="Sex" value="M" />
+              <Field label="Sex" value={applicant.sex} />
               <Field label="Date of expiry" value={formatDate(doc.expiresOn)} className={expired ? "text-red-700" : undefined} />
               <Field label="Authority" value={doc.issuingAuthority} mono={false} className="col-span-2" />
             </div>
@@ -214,7 +214,7 @@ export function IdentityCard({ document: doc, applicant }: { document: IdentityD
               className="col-span-2"
             />
             <Field label="4a Iss" value={formatDate(doc.issuedOn)} />
-            <Field label="15 Sex / 18 Eyes" value="M / BRO" />
+            <Field label="15 Sex / 18 Eyes" value={`${applicant.sex} / BRO`} />
           </div>
         </div>
         <div className="relative mt-2 flex items-center gap-2">
