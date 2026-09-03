@@ -28,8 +28,17 @@ export interface AuditMetadata extends Record<string, unknown> {
   applicationId?: string;
 }
 
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    Object.values(value).forEach(deepFreeze);
+  }
+  return value;
+}
+
 /**
  * Creates an immutable, typed audit event and fans it out to every sink.
+ * Metadata is cloned and deep-frozen so no sink can alter recorded evidence.
  * `metadata.applicationId` is promoted to the top-level record so ledgers
  * can be scoped per application without inspecting the payload.
  */
@@ -47,7 +56,7 @@ export function logAuditEvent(
     role,
     action,
     applicationId,
-    metadata: rest,
+    metadata: deepFreeze(structuredClone(rest)),
   });
   if (sinks.size === 0) pending.push(event);
   else sinks.forEach((sink) => sink(event));

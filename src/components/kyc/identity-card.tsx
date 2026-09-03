@@ -1,5 +1,5 @@
 import type { Applicant, IdentityDocument } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, isExpired } from "@/lib/utils";
 
 const COUNTRY_NAMES: Record<string, string> = {
   US: "UNITED STATES OF AMERICA",
@@ -123,7 +123,7 @@ function Barcode() {
 }
 
 export function IdentityCard({ document: doc, applicant }: { document: IdentityDocument; applicant: Applicant }) {
-  const expired = new Date(doc.expiresOn).getTime() < Date.now();
+  const expired = isExpired(doc.expiresOn);
   const [first, ...rest] = applicant.legalName.split(" ");
   const last = rest.join(" ") || first;
 

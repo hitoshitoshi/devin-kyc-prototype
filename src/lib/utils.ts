@@ -67,8 +67,10 @@ export function initials(name: string): string {
     .join("");
 }
 
+/** Date-only values (`YYYY-MM-DD`) stay valid through the end of the printed day (UTC). */
 export function isExpired(iso: string, now: number = Date.now()): boolean {
-  return new Date(iso).getTime() < now;
+  const endOfDay = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? Date.parse(`${iso}T23:59:59.999Z`) : Date.parse(iso);
+  return endOfDay < now;
 }
 
 export function normalize(s: string): string {
