@@ -11,12 +11,12 @@ import { cn } from "@/lib/utils";
 const ROLE_OPTIONS: SelectOption<UserRole>[] = ROLE_ORDER.map((r) => ({
   value: r,
   label: `${ROLES[r].label} (${ROLES[r].level})`,
-  description: `${ROLES[r].actor} · approves ${ROLES[r].approvableTiers.join("/")} risk`,
+  description: `Approves ${ROLES[r].approvableTiers.join("/")} risk${ROLES[r].canOverrideDecision ? " · overrides" : ""}`,
   icon: ROLES[r].level === "Admin" ? <ShieldCheck className="size-3.5" /> : <UserRound className="size-3.5" />,
 }));
 
 export function RoleSwitcher() {
-  const { role, definition, grants, setRole } = useRole();
+  const { role, definition, actor, grants, setRole } = useRole();
   const params = useParams<{ id?: string }>();
   const [pending, setPending] = useState(false);
   const isAdmin = definition.level === "Admin";
@@ -42,7 +42,7 @@ export function RoleSwitcher() {
         )}
       >
         {isAdmin ? <ShieldCheck className="size-3" /> : <UserRound className="size-3" />}
-        {definition.actor}
+        {actor}
       </span>
       <Select
         aria-label="Active role"

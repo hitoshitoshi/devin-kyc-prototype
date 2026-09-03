@@ -44,6 +44,11 @@ export function findIdentity(sub: string): OperatorIdentity | undefined {
   return SANDBOX_IDENTITIES.find((i) => i.sub === sub);
 }
 
+/** Display name recorded as the audit actor for a session. */
+export function operatorName(session: SessionClaims): string {
+  return findIdentity(session.sub)?.name ?? session.sub;
+}
+
 export async function getSession(): Promise<SessionClaims | null> {
   const store = await cookies();
   return verifySession(store.get(SESSION_COOKIE)?.value);

@@ -5,9 +5,11 @@ import type { Application, UserRole } from "@/lib/types";
 import type { DecisionAction, PermissionResult, RoleDefinition } from "@/lib/auth/roles";
 
 export {
+  ESCALATION_QUEUE,
   ROLES,
   ROLE_ORDER,
   evaluatePermission,
+  isRecordLocked,
   type DecisionAction,
   type PermissionResult,
   type RoleDefinition,
@@ -16,6 +18,7 @@ export {
 export interface RoleContextValue {
   role: UserRole;
   definition: RoleDefinition;
+  /** Display name of the signed-in operator; independent of the active role. */
   actor: string;
   /** Requests a role change; resolves to the role the server granted. */
   setRole: (role: UserRole, applicationId?: string) => Promise<UserRole>;

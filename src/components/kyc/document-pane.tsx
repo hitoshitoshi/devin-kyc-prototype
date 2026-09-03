@@ -191,7 +191,7 @@ export function DocumentPane({ app, locked }: { app: Application; locked: boolea
               );
             })}
           </ul>
-          {locked && <p className="mt-1.5 text-[11px] text-zinc-500">Checklist is read-only: decision is final for your role.</p>}
+          {locked && <p className="mt-1.5 text-[11px] text-zinc-500">Checklist is read-only: this record is {app.status.toLowerCase()} and locked for your role.</p>}
         </div>
       </div>
     </div>

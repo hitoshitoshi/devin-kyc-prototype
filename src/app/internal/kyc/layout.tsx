@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { getSession, operatorName } from "@/lib/auth/session";
 import { KycProvider } from "@/lib/state/kyc-context";
 import { AppBar } from "@/components/kyc/app-bar";
 
@@ -11,7 +11,10 @@ export default async function KycLayout({ children }: { children: ReactNode }) {
   if (!session) redirect("/internal/sign-in");
 
   return (
-    <KycProvider seedAnchor={Date.now()} session={{ role: session.role, grants: session.grants }}>
+    <KycProvider
+      seedAnchor={Date.now()}
+      session={{ operator: operatorName(session), role: session.role, grants: session.grants }}
+    >
       <div className="flex h-screen flex-col overflow-hidden">
         <AppBar />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>

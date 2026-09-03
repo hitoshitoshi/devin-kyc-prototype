@@ -24,26 +24,39 @@ interface Props {
   override: boolean;
   onClose: () => void;
   onConfirm: (input: DecisionInput) => void;
+  /** Server-side authorization failure for the last confirm attempt. */
+  error?: string | null;
 }
 
-function Summary({ app }: { app: Application }) {
+function Summary({ app, error }: { app: Application; error?: string | null }) {
   const completed = Object.values(app.checklist).filter(Boolean).length;
   return (
-    <div className="rounded border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
-      <div className="flex items-center justify-between">
-        <span className="font-mono">{app.id}</span>
-        <div className="flex gap-1.5">
-          <RiskBadge tier={app.risk.tier} score={app.risk.score} />
-          <StatusBadge status={app.status} />
+    <>
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+        >
+          <AlertTriangle className="mt-px size-3.5 shrink-0" />
+          {error}
         </div>
+      )}
+      <div className="rounded border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
+        <div className="flex items-center justify-between">
+          <span className="font-mono">{app.id}</span>
+          <div className="flex gap-1.5">
+            <RiskBadge tier={app.risk.tier} score={app.risk.score} />
+            <StatusBadge status={app.status} />
+          </div>
+        </div>
+        <div className="mt-1 font-medium">{app.applicant.legalName}</div>
+        <div className="text-zinc-500">{app.risk.primaryFlag} · checklist {completed}/3</div>
       </div>
-      <div className="mt-1 font-medium">{app.applicant.legalName}</div>
-      <div className="text-zinc-500">{app.risk.primaryFlag} · checklist {completed}/3</div>
-    </div>
+    </>
   );
 }
 
-export function DecisionModals({ app, action, override, onClose, onConfirm }: Props) {
+export function DecisionModals({ app, action, override, onClose, onConfirm, error }: Props) {
   const [reason, setReason] = useState<RejectionReasonCode | null>(null);
   const [note, setNote] = useState("");
   const [step, setStep] = useState<"input" | "confirm">("input");
@@ -77,7 +90,7 @@ export function DecisionModals({ app, action, override, onClose, onConfirm }: Pr
         }
       >
         <div className="space-y-3">
-          <Summary app={app} />
+          <Summary app={app} error={error} />
           {incomplete && (
             <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
               <AlertTriangle className="mt-px size-3.5 shrink-0" />
@@ -115,7 +128,7 @@ export function DecisionModals({ app, action, override, onClose, onConfirm }: Pr
         }
       >
         <div className="space-y-3">
-          <Summary app={app} />
+          <Summary app={app} error={error} />
           <Textarea
             rows={3}
             value={note}
@@ -210,7 +223,7 @@ export function DecisionModals({ app, action, override, onClose, onConfirm }: Pr
         }
       >
         <div className="space-y-3">
-          <Summary app={app} />
+          <Summary app={app} error={error} />
           <div className="rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
             Reason code: <span className="font-mono font-semibold">{reason}</span>
             {note.trim() && <div className="mt-1 text-red-800/80 dark:text-red-200/80">&ldquo;{note.trim()}&rdquo;</div>}

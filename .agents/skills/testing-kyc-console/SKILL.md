@@ -20,14 +20,15 @@ description: How to run and browser-test the KYC Review Console (Next.js) in dev
 
 ## Selectors / test IDs
 - Queue: `input[aria-label="Search applications"]`, `select[aria-label="Filter by risk tier"]`, `select[aria-label="Filter by status"]`, rows `data-testid="queue-row-<APP-ID>"`.
-- Header role: custom listbox `button[aria-label="Active role"]` (role=combobox) → options in `ul[role=listbox]`. Switching calls the `switchRole` server action (brief disabled state), then the actor chip shows Priya Natarajan / Marcus Ellison.
+- Header role: custom listbox `button[aria-label="Active role"]` (role=combobox) → options in `ul[role=listbox]`. Switching calls the `switchRole` server action (brief disabled state), the actor chip always shows the signed-in operator (Priya Natarajan or Marcus Ellison) regardless of active role — all audit events carry that operator as `actor` with the role as separate metadata.
 - Detail: `console-app-id`, `ssn-value`, `ssn-reveal`, `checklist-tamperCheckPassed|facialMatchVerified|expirationValid`, `action-approve|reject|escalate`, `confirm-approve|reject|escalate`, `reject-continue`.
-- Audit drawer: `audit-drawer-tab` (collapsed at 32px; click to expand to 280px), rows `audit-row-<ACTION>`. Metadata column is truncated on screen — full JSON is in the `<code title="...">` attribute. *Copy JSON* writes a minimized export (`ip` → `[redacted]`, `redactedFields` array) and appends `LEDGER_EXPORTED`.
+- Audit drawer: `audit-drawer-tab` (collapsed at 32px; click to expand to 280px), rows `audit-row-<ACTION>`. Metadata column is truncated on screen — full JSON is in the `<code title="...">` attribute. *Copy JSON* writes a minimized export (`ip` → `[redacted]`, `redactedFields` array) and appends `LEDGER_EXPORTED` only after the clipboard write resolves (headless/insecure contexts without clipboard permission log nothing).
 
 ## Gotchas
-- `VIEWED_RECORD` is deduped only within a 2s window per (app, actor); re-opening a record later legitimately adds another one.
+- `VIEWED_RECORD` is deduped only within a 2s window per (app, role); re-opening a record later legitimately adds another one.
 - Escalating/rejecting/approving as Tier-1 makes the decision final for that role (buttons disabled, checklist read-only) — use a fresh Pending record per decision type.
-- Escalate reassigns the record to Marcus Ellison (Compliance Lead); the `STATUS_UPDATED` event carries `reassignedFrom`/`reassignedTo`.
+- Escalate reassigns the record to `Compliance Lead queue`; the `STATUS_UPDATED` event carries `reassignedTo`. Escalated records are read-only (checklist disabled) for Tier-1; a Compliance Lead deciding one becomes its assignee.
+- Decisions go through the `authorizeDecision` server action (`PII_UNMASKED` and `STATUS_UPDATED` are emitted server-side and appear in the ledger once the action resolves — allow a short delay before asserting). A denied decision shows a red `role=alert` banner inside the modal instead of closing it.
 - Hovering with a single `mouse_move` sometimes doesn't trigger the CSS `group-hover` tooltip; nudge the mouse a few px and re-hover.
 
 ## Devin Secrets Needed

@@ -11,9 +11,13 @@ import {
   type ReactNode,
 } from "react";
 import { logAuditEvent, registerAuditSink } from "@/lib/audit/logger";
-import { evaluatePermission, ROLES, RoleContext, type RoleContextValue } from "@/lib/auth/rbac";
+import { evaluatePermission, isRecordLocked, ROLES, RoleContext, type RoleContextValue } from "@/lib/auth/rbac";
 import { buildSeedApplications, buildSeedAuditEvents } from "@/lib/data/seed";
-import { revealSsn as revealSsnAction, switchRole as switchRoleAction } from "@/app/internal/kyc/actions";
+import {
+  authorizeDecision as authorizeDecisionAction,
+  revealSsn as revealSsnAction,
+  switchRole as switchRoleAction,
+} from "@/app/internal/kyc/actions";
 import { checklistConstraint } from "@/lib/checklist";
 import { minimizeForExport } from "@/lib/audit/export";
 import type {
@@ -27,11 +31,14 @@ import type {
 } from "@/lib/types";
 
 export interface SessionSnapshot {
+  /** Display name of the signed-in operator; recorded as the actor on every event. */
+  operator: string;
   role: UserRole;
   grants: readonly UserRole[];
 }
 
 interface KycState {
+  operator: string;
   role: UserRole;
   grants: readonly UserRole[];
   applications: Application[];
@@ -85,9 +92,12 @@ interface KycContextValue {
   /** Returns false when the item cannot be checked (e.g. expired document). */
   toggleChecklist: (id: string, key: ChecklistKey) => boolean;
   addNote: (id: string, body: string) => void;
-  decide: (id: string, input: DecisionInput) => void;
-  /** Minimized ledger export for one application; records `LEDGER_EXPORTED`. */
-  exportLedger: (id: string) => string;
+  /** Authorizes the decision on the server, then commits it; resolves false when not permitted. */
+  decide: (id: string, input: DecisionInput) => Promise<boolean>;
+  /** Data-minimized ledger for one application, ready for export. */
+  serializeLedger: (id: string) => { json: string; eventCount: number };
+  /** Records `LEDGER_EXPORTED`; call only once the export has actually been delivered. */
+  recordLedgerExport: (id: string, eventCount: number) => void;
 }
 
 const KycContext = createContext<KycContextValue | null>(null);
@@ -95,6 +105,7 @@ const KycContext = createContext<KycContextValue | null>(null);
 function buildInitialState({ seedAnchor, session }: { seedAnchor: number; session: SessionSnapshot }): KycState {
   const applications = buildSeedApplications(seedAnchor);
   return {
+    operator: session.operator,
     role: session.role,
     grants: session.grants,
     applications,
@@ -121,7 +132,7 @@ export function KycProvider({
     return registerAuditSink((event) => dispatch({ type: "APPEND_EVENT", event }));
   }, []);
 
-  const actorFor = useCallback((role: UserRole) => ROLES[role].actor, []);
+  const operator = state.operator;
 
   const setRole = useCallback(
     async (requested: UserRole, applicationId?: string) => {
@@ -130,15 +141,14 @@ export function KycProvider({
       const granted = await switchRoleAction(requested);
       if (granted === prev) return prev;
       dispatch({ type: "SET_ROLE", role: granted });
-      logAuditEvent("ROLE_SWITCHED", actorFor(granted), granted, {
+      logAuditEvent("ROLE_SWITCHED", operator, granted, {
         applicationId,
         from: prev,
         to: granted,
-        previousActor: actorFor(prev),
       });
       return granted;
     },
-    [actorFor],
+    [operator],
   );
 
   const getApplication = useCallback(
@@ -150,31 +160,21 @@ export function KycProvider({
   const viewRecord = useCallback(
     (id: string) => {
       const { role } = stateRef.current;
-      const actor = actorFor(role);
-      const key = `${id}:${actor}`;
+      const key = `${id}:${role}`;
       const now = Date.now();
       const last = lastViewRef.current;
       if (last && last.key === key && now - last.at < 2_000) return;
       lastViewRef.current = { key, at: now };
-      logAuditEvent("VIEWED_RECORD", actor, role, { applicationId: id, surface: "review-console" });
+      logAuditEvent("VIEWED_RECORD", operator, role, { applicationId: id, surface: "review-console" });
     },
-    [actorFor],
+    [operator],
   );
 
-  const revealSsn = useCallback(
-    async (id: string) => {
-      const { role } = stateRef.current;
-      const { ssn, disclosedAt } = await revealSsnAction(id);
-      logAuditEvent("PII_UNMASKED", actorFor(role), role, {
-        applicationId: id,
-        field: "ssn",
-        justification: "manual-review",
-        disclosedAt,
-      });
-      return ssn;
-    },
-    [actorFor],
-  );
+  const revealSsn = useCallback(async (id: string) => {
+    const { ssn, event } = await revealSsnAction(id);
+    dispatch({ type: "APPEND_EVENT", event });
+    return ssn;
+  }, []);
 
   /**
    * Pending applications move to Under Review the first time an analyst
@@ -202,9 +202,9 @@ export function KycProvider({
   const toggleChecklist = useCallback(
     (id: string, key: ChecklistKey) => {
       const { role } = stateRef.current;
-      const actor = actorFor(role);
+      const actor = operator;
       const app = getApplication(id);
-      if (!app) return false;
+      if (!app || isRecordLocked(role, app)) return false;
       const next = !app.checklist[key];
       if (next && !checklistConstraint(app, key).allowed) return false;
       const start = beginReviewIfPending(app, actor, role);
@@ -223,7 +223,7 @@ export function KycProvider({
       });
       return true;
     },
-    [actorFor, beginReviewIfPending, getApplication],
+    [operator, beginReviewIfPending, getApplication],
   );
 
   const addNote = useCallback(
@@ -231,7 +231,7 @@ export function KycProvider({
       const trimmed = body.trim();
       if (!trimmed) return;
       const { role } = stateRef.current;
-      const actor = actorFor(role);
+      const actor = operator;
       const app = getApplication(id);
       if (!app) return;
       const note: ReviewNote = {
@@ -256,28 +256,30 @@ export function KycProvider({
         length: trimmed.length,
       });
     },
-    [actorFor, beginReviewIfPending, getApplication],
+    [operator, beginReviewIfPending, getApplication],
   );
 
   const decide = useCallback(
-    (id: string, input: DecisionInput) => {
+    async (id: string, input: DecisionInput) => {
       const { role } = stateRef.current;
-      const actor = actorFor(role);
       const app = getApplication(id);
-      if (!app) return;
+      if (!app) return false;
       const action =
         input.status === "Approved" ? "approve" : input.status === "Rejected" ? "reject" : "escalate";
-      const permission = evaluatePermission(role, app, action);
-      if (!permission.allowed) return;
+      if (!evaluatePermission(role, app, action).allowed) return false;
 
-      const decidedAt = new Date().toISOString();
-      const from = app.status;
-      const routedTo = input.status === "Escalated" ? ROLES.COMPLIANCE_LEAD.actor : null;
+      const authorization = await authorizeDecisionAction({
+        applicationId: id,
+        status: input.status,
+        currentStatus: app.status,
+        reasonCode: input.reasonCode,
+      });
+      const { decidedBy, decidedAt, routedTo, event } = authorization;
       const decisionNote: ReviewNote | null = input.note?.trim()
         ? {
             id: `N-${++noteSequence}`,
-            author: actor,
-            role,
+            author: decidedBy,
+            role: authorization.role,
             body: input.note.trim(),
             createdAt: decidedAt,
           }
@@ -288,52 +290,48 @@ export function KycProvider({
         updater: (a) => ({
           ...a,
           status: input.status,
-          assignedReviewer: routedTo ?? a.assignedReviewer ?? actor,
+          assignedReviewer: routedTo ?? (a.status === "Escalated" ? decidedBy : a.assignedReviewer ?? decidedBy),
           decision: {
             outcome: input.status,
-            decidedBy: actor,
-            role,
+            decidedBy,
+            role: authorization.role,
             decidedAt,
             reasonCode: input.reasonCode,
-            override: permission.override,
+            override: authorization.override,
           },
           notes: decisionNote ? [...a.notes, decisionNote] : a.notes,
         }),
       });
       if (decisionNote) {
-        logAuditEvent("NOTE_ADDED", actor, role, {
+        logAuditEvent("NOTE_ADDED", decidedBy, authorization.role, {
           applicationId: id,
           noteId: decisionNote.id,
           length: decisionNote.body.length,
           context: "decision",
         });
       }
-      logAuditEvent("STATUS_UPDATED", actor, role, {
-        applicationId: id,
-        from,
-        to: input.status,
-        ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
-        ...(permission.override ? { override: true } : {}),
-        ...(routedTo ? { reassignedFrom: app.assignedReviewer, reassignedTo: routedTo } : {}),
-        riskTier: app.risk.tier,
-      });
+      dispatch({ type: "APPEND_EVENT", event });
+      return true;
     },
-    [actorFor, getApplication],
+    [getApplication],
   );
 
-  const exportLedger = useCallback(
-    (id: string) => {
-      const { role, auditEvents } = stateRef.current;
-      const events = auditEvents.filter((e) => e.applicationId === id);
-      logAuditEvent("LEDGER_EXPORTED", actorFor(role), role, {
+  const serializeLedger = useCallback((id: string) => {
+    const events = stateRef.current.auditEvents.filter((e) => e.applicationId === id);
+    return { json: JSON.stringify(minimizeForExport(events), null, 2), eventCount: events.length };
+  }, []);
+
+  const recordLedgerExport = useCallback(
+    (id: string, eventCount: number) => {
+      const { role } = stateRef.current;
+      logAuditEvent("LEDGER_EXPORTED", operator, role, {
         applicationId: id,
-        eventCount: events.length,
+        eventCount,
         destination: "clipboard",
         minimized: true,
       });
-      return JSON.stringify(minimizeForExport(events), null, 2);
     },
-    [actorFor],
+    [operator],
   );
 
   const metrics = useMemo<QueueMetrics>(() => {
@@ -361,12 +359,12 @@ export function KycProvider({
     () => ({
       role: state.role,
       definition: ROLES[state.role],
-      actor: ROLES[state.role].actor,
+      actor: state.operator,
       setRole,
       grants: state.grants,
       can: (app, action) => evaluatePermission(state.role, app, action),
     }),
-    [state.role, state.grants, setRole],
+    [state.role, state.grants, state.operator, setRole],
   );
 
   const value = useMemo<KycContextValue>(
@@ -381,9 +379,22 @@ export function KycProvider({
       toggleChecklist,
       addNote,
       decide,
-      exportLedger,
+      serializeLedger,
+      recordLedgerExport,
     }),
-    [state.applications, state.auditEvents, metrics, eventsFor, viewRecord, revealSsn, toggleChecklist, addNote, decide, exportLedger],
+    [
+      state.applications,
+      state.auditEvents,
+      metrics,
+      eventsFor,
+      viewRecord,
+      revealSsn,
+      toggleChecklist,
+      addNote,
+      decide,
+      serializeLedger,
+      recordLedgerExport,
+    ],
   );
 
   return (

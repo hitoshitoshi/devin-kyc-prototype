@@ -24,7 +24,7 @@ const ACTION_TONE: Record<AuditAction, BadgeTone> = {
 };
 
 export function AuditDrawer({ applicationId, events }: { applicationId: string; events: AuditEvent[] }) {
-  const { exportLedger } = useKyc();
+  const { serializeLedger, recordLedgerExport } = useKyc();
   const [open, setOpen] = useState(false);
   const [newestFirst, setNewestFirst] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -33,8 +33,10 @@ export function AuditDrawer({ applicationId, events }: { applicationId: string; 
   const last = events[events.length - 1];
 
   const copy = async () => {
+    const { json, eventCount } = serializeLedger(applicationId);
     try {
-      await navigator.clipboard.writeText(exportLedger(applicationId));
+      await navigator.clipboard.writeText(json);
+      recordLedgerExport(applicationId, eventCount);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

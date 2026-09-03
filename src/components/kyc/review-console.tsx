@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
 import { useKyc, type DecisionInput } from "@/lib/state/kyc-context";
-import { useRole, type DecisionAction } from "@/lib/auth/rbac";
+import { isRecordLocked, useRole, type DecisionAction } from "@/lib/auth/rbac";
 import { formatRelative, formatTimestamp, initials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -19,7 +19,7 @@ import { AuditDrawer } from "@/components/kyc/audit-drawer";
 export function ReviewConsole({ id }: { id: string }) {
   const router = useRouter();
   const { applications, eventsFor, viewRecord, decide } = useKyc();
-  const { can, definition } = useRole();
+  const { can, role } = useRole();
   const [action, setAction] = useState<DecisionAction | null>(null);
 
   const app = applications.find((a) => a.id === id);
@@ -45,15 +45,23 @@ export function ReviewConsole({ id }: { id: string }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [router, action, prev, next]);
 
-  const closeModal = useCallback(() => setAction(null), []);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const closeModal = useCallback(() => {
+    setAction(null);
+    setDecisionError(null);
+  }, []);
 
   const confirm = useCallback(
-    (input: DecisionInput) => {
+    async (input: DecisionInput) => {
       if (!app) return;
-      decide(app.id, input);
-      setAction(null);
+      try {
+        if (await decide(app.id, input)) closeModal();
+        else setDecisionError("Decision not permitted for your role.");
+      } catch (err) {
+        setDecisionError(err instanceof Error ? err.message : "Decision could not be authorized.");
+      }
     },
-    [app, decide],
+    [app, decide, closeModal],
   );
 
   if (!app) {
@@ -68,8 +76,7 @@ export function ReviewConsole({ id }: { id: string }) {
     );
   }
 
-  const isFinal = app.status === "Approved" || app.status === "Rejected";
-  const locked = isFinal && !definition.canOverrideDecision;
+  const locked = isRecordLocked(role, app);
   const override = action ? can(app, action).override : false;
 
   return (
@@ -152,7 +159,14 @@ export function ReviewConsole({ id }: { id: string }) {
 
       <AuditDrawer applicationId={app.id} events={eventsFor(app.id)} />
 
-      <DecisionModals app={app} action={action} override={override} onClose={closeModal} onConfirm={confirm} />
+      <DecisionModals
+        app={app}
+        action={action}
+        override={override}
+        onClose={closeModal}
+        onConfirm={confirm}
+        error={decisionError}
+      />
     </div>
   );
 }

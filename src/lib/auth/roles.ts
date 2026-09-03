@@ -4,8 +4,6 @@ export interface RoleDefinition {
   id: UserRole;
   label: string;
   level: "Junior" | "Admin";
-  /** Display name of the seeded operator acting under this role. */
-  actor: string;
   approvableTiers: readonly RiskTier[];
   canReject: boolean;
   canEscalate: boolean;
@@ -18,7 +16,6 @@ export const ROLES: Record<UserRole, RoleDefinition> = {
     id: "TIER1_ANALYST",
     label: "Tier-1 Analyst",
     level: "Junior",
-    actor: "Priya Natarajan",
     approvableTiers: ["Low", "Medium"],
     canReject: true,
     canEscalate: true,
@@ -29,7 +26,6 @@ export const ROLES: Record<UserRole, RoleDefinition> = {
     id: "COMPLIANCE_LEAD",
     label: "Compliance Lead",
     level: "Admin",
-    actor: "Marcus Ellison",
     approvableTiers: ["Low", "Medium", "High"],
     canReject: true,
     canEscalate: true,
@@ -39,6 +35,12 @@ export const ROLES: Record<UserRole, RoleDefinition> = {
 };
 
 export const ROLE_ORDER: readonly UserRole[] = ["TIER1_ANALYST", "COMPLIANCE_LEAD"];
+
+/**
+ * Work queue that escalated records are routed to. Holds the assignment until
+ * an operator with `canDecideEscalated` takes a decision and claims the record.
+ */
+export const ESCALATION_QUEUE = "Compliance Lead queue";
 
 export type DecisionAction = "approve" | "reject" | "escalate";
 
@@ -51,6 +53,18 @@ export interface PermissionResult {
 }
 
 const FINAL_STATUSES = new Set<Application["status"]>(["Approved", "Rejected"]);
+
+/**
+ * True when the record's checklist and review artifacts are read-only for
+ * this role: finalized records unless the role can override, and escalated
+ * records unless the role can decide them.
+ */
+export function isRecordLocked(role: UserRole, app: Application): boolean {
+  const def = ROLES[role];
+  if (FINAL_STATUSES.has(app.status)) return !def.canOverrideDecision;
+  if (app.status === "Escalated") return !def.canDecideEscalated;
+  return false;
+}
 
 export function evaluatePermission(
   role: UserRole,

@@ -8,6 +8,8 @@ import type { UserRole } from "@/lib/types";
  */
 export const SESSION_COOKIE = "kyc_session";
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
+/** Tolerated clock difference between the issuing and verifying runtime. */
+const CLOCK_SKEW_SECONDS = 60;
 
 export interface SessionClaims {
   /** Stable subject identifier for the signed-in operator. */
@@ -80,7 +82,10 @@ function isClaims(value: unknown): value is SessionClaims {
   );
 }
 
-/** Returns the claims when the token is well-formed, authentic and unexpired. */
+/**
+ * Returns the claims when the token is well-formed, authentic, currently
+ * valid and was issued with a lifetime no longer than `SESSION_TTL_SECONDS`.
+ */
 export async function verifySession(token: string | undefined, now = Date.now()): Promise<SessionClaims | null> {
   if (!token) return null;
   const [payload, mac] = token.split(".");
@@ -90,7 +95,10 @@ export async function verifySession(token: string | undefined, now = Date.now())
     if (!valid) return null;
     const claims: unknown = JSON.parse(new TextDecoder().decode(fromBase64Url(payload)));
     if (!isClaims(claims)) return null;
-    if (claims.exp * 1000 <= now) return null;
+    const nowSeconds = Math.floor(now / 1000);
+    if (claims.iat > nowSeconds + CLOCK_SKEW_SECONDS) return null;
+    if (claims.exp <= claims.iat || claims.exp - claims.iat > SESSION_TTL_SECONDS) return null;
+    if (claims.exp <= nowSeconds) return null;
     return claims;
   } catch {
     return null;

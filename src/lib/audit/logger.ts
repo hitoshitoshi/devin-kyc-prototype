@@ -11,6 +11,9 @@ const sinks = new Set<AuditSink>();
 // dropped during mount ordering; they replay into the first sink registered.
 let pending: AuditEvent[] = [];
 let sequence = 0;
+// Distinguishes events minted by different runtimes (browser vs. server
+// actions) that feed the same ledger.
+const RUNTIME = Math.random().toString(36).slice(2, 5).toUpperCase();
 
 export function registerAuditSink(sink: AuditSink): () => void {
   sinks.add(sink);
@@ -50,7 +53,7 @@ export function logAuditEvent(
 ): AuditEvent {
   const { applicationId, ...rest } = metadata;
   const event: AuditEvent = Object.freeze({
-    id: `EVT-${Date.now().toString(36).toUpperCase()}-${(++sequence).toString(36).toUpperCase().padStart(3, "0")}`,
+    id: `EVT-${Date.now().toString(36).toUpperCase()}-${RUNTIME}${(++sequence).toString(36).toUpperCase().padStart(3, "0")}`,
     timestamp: new Date().toISOString(),
     actor,
     role,
