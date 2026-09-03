@@ -38,20 +38,39 @@ export async function revealSsn(applicationId: string): Promise<RevealSsnResult>
   return { ssn, event };
 }
 
+export interface BeginReviewResult {
+  record: RecordSnapshot;
+  /** The `STATUS_UPDATED` event, when this call performed the transition. */
+  event: AuditEvent | null;
+}
+
 /**
  * Moves a Pending record to Under Review and assigns it to the operator on
- * their first review action. Idempotent; returns the authoritative snapshot.
+ * their first review action. Idempotent: a record that is already past
+ * Pending is returned unchanged with no event.
  */
-export async function beginReview(applicationId: string): Promise<RecordSnapshot> {
+export async function beginReview(applicationId: string): Promise<BeginReviewResult> {
   const session = await requireSession();
   const record = getRecord(applicationId);
   if (!record) throw new Error(`Unknown application ${applicationId}`);
-  if (record.status !== "Pending") return record;
-  return commitRecord({
+  if (record.status !== "Pending") return { record: snapshot(record), event: null };
+  const committed = commitRecord({
     ...record,
     status: "Under Review",
     assignedReviewer: record.assignedReviewer ?? operatorName(session),
   });
+  const event = logAuditEvent("STATUS_UPDATED", operatorName(session), session.role, {
+    applicationId: committed.id,
+    from: "Pending",
+    to: committed.status,
+    trigger: "auto:first-review-action",
+    operator: session.sub,
+  });
+  return { record: snapshot(committed), event };
+}
+
+function snapshot({ id, status, assignedReviewer, decision }: RecordSnapshot): RecordSnapshot {
+  return { id, status, assignedReviewer, decision };
 }
 
 export interface DecisionRequest {
@@ -110,8 +129,7 @@ export async function commitDecision(request: DecisionRequest): Promise<Committe
     riskTier: committed.risk.tier,
     operator: session.sub,
   });
-  const { id, status, assignedReviewer, decision } = committed;
-  return { record: { id, status, assignedReviewer, decision }, event };
+  return { record: snapshot(committed), event };
 }
 
 /**

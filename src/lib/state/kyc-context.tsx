@@ -107,19 +107,21 @@ const KycContext = createContext<KycContextValue | null>(null);
 function buildInitialState({
   seedAnchor,
   records,
+  events,
   session,
 }: {
   seedAnchor: number;
   records: readonly RecordSnapshot[];
+  events: readonly AuditEvent[];
   session: SessionSnapshot;
 }): KycState {
-  const applications = applySnapshots(buildSeedApplications(seedAnchor), records);
+  const seeded = buildSeedApplications(seedAnchor);
   return {
     operator: session.operator,
     role: session.role,
     grants: session.grants,
-    applications,
-    auditEvents: buildSeedAuditEvents(applications),
+    applications: applySnapshots(seeded, records),
+    auditEvents: [...buildSeedAuditEvents(seeded), ...events],
   };
 }
 
@@ -129,15 +131,18 @@ export function KycProvider({
   children,
   seedAnchor,
   records,
+  events,
   session,
 }: {
   children: ReactNode;
   seedAnchor: number;
-  /** Server-authoritative disposition of each record at render time. */
+  /** Dispositions committed on the server since seeding. */
   records: readonly RecordSnapshot[];
+  /** Audit events recorded on the server since seeding. */
+  events: readonly AuditEvent[];
   session: SessionSnapshot;
 }) {
-  const [state, dispatch] = useReducer(reducer, { seedAnchor, records, session }, buildInitialState);
+  const [state, dispatch] = useReducer(reducer, { seedAnchor, records, events, session }, buildInitialState);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -191,27 +196,22 @@ export function KycProvider({
 
   /**
    * Pending applications move to Under Review the first time an analyst
-   * touches them. Returns a pure updater; the transition is committed to the
-   * server store and logged here so the reducer stays side-effect free.
+   * touches them. The transition is committed and audited on the server; the
+   * local copy is updated only from the committed record it returns.
    */
-  const beginReviewIfPending = useCallback(
-    (app: Application, actor: string, role: UserRole): ((a: Application) => Application) => {
-      if (app.status !== "Pending") return (a) => a;
-      void beginReviewAction(app.id).catch(() => undefined);
-      logAuditEvent("STATUS_UPDATED", actor, role, {
-        applicationId: app.id,
-        from: "Pending",
-        to: "Under Review",
-        trigger: "auto:first-review-action",
-      });
-      return (a) => ({
-        ...a,
-        status: "Under Review",
-        assignedReviewer: a.assignedReviewer ?? actor,
-      });
-    },
-    [],
-  );
+  const ensureReviewStarted = useCallback((app: Application) => {
+    if (app.status !== "Pending") return;
+    void beginReviewAction(app.id)
+      .then(({ record, event }) => {
+        if (event) dispatch({ type: "APPEND_EVENT", event });
+        dispatch({
+          type: "UPDATE_APPLICATION",
+          id: record.id,
+          updater: (a) => ({ ...a, status: record.status, assignedReviewer: record.assignedReviewer }),
+        });
+      })
+      .catch(() => undefined);
+  }, []);
 
   const toggleChecklist = useCallback(
     (id: string, key: ChecklistKey) => {
@@ -221,14 +221,11 @@ export function KycProvider({
       if (!app || isRecordLocked(role, app)) return false;
       const next = !app.checklist[key];
       if (next && !checklistConstraint(app, key).allowed) return false;
-      const start = beginReviewIfPending(app, actor, role);
+      ensureReviewStarted(app);
       dispatch({
         type: "UPDATE_APPLICATION",
         id,
-        updater: (a) => {
-          const started = start(a);
-          return { ...started, checklist: { ...started.checklist, [key]: next } };
-        },
+        updater: (a) => ({ ...a, checklist: { ...a.checklist, [key]: next } }),
       });
       logAuditEvent("CHECKLIST_UPDATED", actor, role, {
         applicationId: id,
@@ -237,7 +234,7 @@ export function KycProvider({
       });
       return true;
     },
-    [operator, beginReviewIfPending, getApplication],
+    [operator, ensureReviewStarted, getApplication],
   );
 
   const addNote = useCallback(
@@ -255,14 +252,11 @@ export function KycProvider({
         body: trimmed,
         createdAt: new Date().toISOString(),
       };
-      const start = beginReviewIfPending(app, actor, role);
+      ensureReviewStarted(app);
       dispatch({
         type: "UPDATE_APPLICATION",
         id,
-        updater: (a) => {
-          const started = start(a);
-          return { ...started, notes: [...started.notes, note] };
-        },
+        updater: (a) => ({ ...a, notes: [...a.notes, note] }),
       });
       logAuditEvent("NOTE_ADDED", actor, role, {
         applicationId: id,
@@ -270,7 +264,7 @@ export function KycProvider({
         length: trimmed.length,
       });
     },
-    [operator, beginReviewIfPending, getApplication],
+    [operator, ensureReviewStarted, getApplication],
   );
 
   const decide = useCallback(
