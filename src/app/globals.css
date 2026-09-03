@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  font-feature-settings: "cv11", "ss01", "tnum";
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(161 161 170 / 0.5) transparent;
+}
+
+::selection {
+  @apply bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900;
+}
+
+:focus-visible {
+  @apply outline-none ring-2 ring-zinc-900/20 dark:ring-zinc-100/25;
+}
