@@ -36,6 +36,19 @@ const toneClasses: Record<BadgeTone, { wrap: string; dot: string }> = {
   },
 };
 
+export function ToneDot({ tone, className }: { tone?: BadgeTone; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        tone ? toneClasses[tone].dot : "ring-1 ring-zinc-400 ring-inset",
+        className,
+      )}
+      aria-hidden
+    />
+  );
+}
+
 export function Badge({ tone = "neutral", dot = false, mono = false, className, children, ...props }: BadgeProps) {
   const t = toneClasses[tone];
   return (

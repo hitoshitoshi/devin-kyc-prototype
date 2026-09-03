@@ -9,16 +9,23 @@ import type { Application, ApplicationStatus, RiskTier } from "@/lib/types";
 import { cn, formatRelative, formatTimestamp, initials, normalize } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import { Select } from "@/components/ui/select";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { FlagBadge, RiskBadge, StatusBadge } from "@/components/kyc/badges";
+import { ToneDot } from "@/components/ui/badge";
+import { FlagBadge, RISK_TONE, RiskBadge, STATUS_TONE, StatusBadge } from "@/components/kyc/badges";
 
 type RiskFilter = "All" | RiskTier;
 type StatusFilter = "All" | ApplicationStatus;
 type SortKey = "submittedAt" | "score" | "status";
 
-const RISK_OPTIONS: RiskFilter[] = ["All", "Low", "Medium", "High"];
-const STATUS_OPTIONS: StatusFilter[] = ["All", "Pending", "Under Review", "Approved", "Rejected", "Escalated"];
+const RISK_OPTIONS: SelectOption<RiskFilter>[] = [
+  { value: "All", label: "All", icon: <ToneDot /> },
+  ...(Object.keys(RISK_TONE) as RiskTier[]).map((t) => ({ value: t, label: t, icon: <ToneDot tone={RISK_TONE[t]} /> })),
+];
+const STATUS_OPTIONS: SelectOption<StatusFilter>[] = [
+  { value: "All", label: "All", icon: <ToneDot /> },
+  ...(Object.keys(STATUS_TONE) as ApplicationStatus[]).map((s) => ({ value: s, label: s, icon: <ToneDot tone={STATUS_TONE[s]} /> })),
+];
 const STATUS_RANK: Record<ApplicationStatus, number> = {
   Escalated: 0,
   Pending: 1,
@@ -171,20 +178,8 @@ export function QueueView() {
             )}
           </div>
         </div>
-        <Select label="Risk" value={risk} onChange={(e) => setRisk(e.target.value as RiskFilter)} aria-label="Filter by risk tier">
-          {RISK_OPTIONS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </Select>
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Filter by status">
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </Select>
+        <Select label="Risk" value={risk} options={RISK_OPTIONS} onChange={setRisk} aria-label="Filter by risk tier" />
+        <Select label="Status" value={status} options={STATUS_OPTIONS} onChange={setStatus} aria-label="Filter by status" />
         {hasFilters && (
           <button
             type="button"

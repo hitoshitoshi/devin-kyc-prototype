@@ -4,8 +4,15 @@ import { useParams } from "next/navigation";
 import { ShieldCheck, UserRound } from "lucide-react";
 import { ROLES, ROLE_ORDER, useRole } from "@/lib/auth/rbac";
 import type { UserRole } from "@/lib/types";
-import { Select } from "@/components/ui/select";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
+const ROLE_OPTIONS: SelectOption<UserRole>[] = ROLE_ORDER.map((r) => ({
+  value: r,
+  label: `${ROLES[r].label} (${ROLES[r].level})`,
+  description: `${ROLES[r].actor} · approves ${ROLES[r].approvableTiers.join("/")} risk`,
+  icon: ROLES[r].level === "Admin" ? <ShieldCheck className="size-3.5" /> : <UserRound className="size-3.5" />,
+}));
 
 export function RoleSwitcher() {
   const { role, definition, setRole } = useRole();
@@ -29,14 +36,10 @@ export function RoleSwitcher() {
         aria-label="Active role"
         label="Role"
         value={role}
-        onChange={(e) => setRole(e.target.value as UserRole, params?.id)}
-      >
-        {ROLE_ORDER.map((r) => (
-          <option key={r} value={r}>
-            {ROLES[r].label} ({ROLES[r].level})
-          </option>
-        ))}
-      </Select>
+        options={ROLE_OPTIONS}
+        onChange={(r) => setRole(r, params?.id)}
+        align="end"
+      />
     </div>
   );
 }

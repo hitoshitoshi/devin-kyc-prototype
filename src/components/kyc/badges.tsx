@@ -1,7 +1,7 @@
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import type { ApplicationStatus, PrimaryFlag, RiskTier } from "@/lib/types";
 
-const STATUS_TONE: Record<ApplicationStatus, BadgeTone> = {
+export const STATUS_TONE: Record<ApplicationStatus, BadgeTone> = {
   Pending: "neutral",
   "Under Review": "blue",
   Approved: "green",
@@ -17,7 +17,7 @@ export function StatusBadge({ status, className }: { status: ApplicationStatus; 
   );
 }
 
-const RISK_TONE: Record<RiskTier, BadgeTone> = {
+export const RISK_TONE: Record<RiskTier, BadgeTone> = {
   Low: "green",
   Medium: "amber",
   High: "red",
