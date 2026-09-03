@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
@@ -46,6 +46,8 @@ export function ReviewConsole({ id }: { id: string }) {
   }, [router, action, prev, next]);
 
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState(false);
+  const decidingRef = useRef(false);
   const closeModal = useCallback(() => {
     setAction(null);
     setDecisionError(null);
@@ -53,12 +55,17 @@ export function ReviewConsole({ id }: { id: string }) {
 
   const confirm = useCallback(
     async (input: DecisionInput) => {
-      if (!app) return;
+      if (!app || decidingRef.current) return;
+      decidingRef.current = true;
+      setDeciding(true);
       try {
         if (await decide(app.id, input)) closeModal();
         else setDecisionError("Decision not permitted for your role.");
       } catch (err) {
         setDecisionError(err instanceof Error ? err.message : "Decision could not be authorized.");
+      } finally {
+        decidingRef.current = false;
+        setDeciding(false);
       }
     },
     [app, decide, closeModal],
@@ -165,6 +172,7 @@ export function ReviewConsole({ id }: { id: string }) {
         override={override}
         onClose={closeModal}
         onConfirm={confirm}
+        pending={deciding}
         error={decisionError}
       />
     </div>

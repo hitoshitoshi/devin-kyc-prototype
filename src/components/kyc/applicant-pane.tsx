@@ -4,9 +4,11 @@ import { useState, type ReactNode } from "react";
 import { Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { Application } from "@/lib/types";
 import { useKyc } from "@/lib/state/kyc-context";
+import { evaluateDisclosure, useRole } from "@/lib/auth/rbac";
 import { cn, formatDateLong, formatSsn, formatTimestamp, formatUsd, maskSsn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export function PaneHeader({ title, meta, children }: { title: string; meta?: ReactNode; children?: ReactNode }) {
   return (
@@ -35,9 +37,12 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export function ApplicantPane({ app }: { app: Application }) {
   const { revealSsn } = useKyc();
+  const { role } = useRole();
   const [ssn, setSsn] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [denied, setDenied] = useState<string | null>(null);
   const revealed = ssn !== null;
+  const disclosure = evaluateDisclosure(role, app);
   const { applicant } = app;
   const screening = applicant.screening;
   const screeningClear = !screening.pep && !screening.sanctions && !screening.adverseMedia;
@@ -48,8 +53,11 @@ export function ApplicantPane({ app }: { app: Application }) {
       return;
     }
     setPending(true);
+    setDenied(null);
     try {
       setSsn(await revealSsn(app.id));
+    } catch (err) {
+      setDenied(err instanceof Error ? err.message : "Disclosure was not authorized.");
     } finally {
       setPending(false);
     }
@@ -76,21 +84,28 @@ export function ApplicantPane({ app }: { app: Application }) {
               >
                 {ssn ? formatSsn(ssn) : maskSsn(applicant.ssnLast4)}
               </span>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={toggleReveal}
-                disabled={pending}
-                aria-pressed={revealed}
-                className="-my-1 text-[11px]"
-                data-testid="ssn-reveal"
-              >
-                {revealed ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                {revealed ? "Mask" : "Reveal"}
-              </Button>
+              <Tooltip content={disclosure.allowed || revealed ? undefined : disclosure.reason} align="end">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={toggleReveal}
+                  disabled={pending || (!revealed && !disclosure.allowed)}
+                  aria-pressed={revealed}
+                  className="-my-1 text-[11px]"
+                  data-testid="ssn-reveal"
+                >
+                  {revealed ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                  {revealed ? "Mask" : "Reveal"}
+                </Button>
+              </Tooltip>
             </div>
             {revealed && (
               <div className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">Access logged to audit ledger (PII_UNMASKED)</div>
+            )}
+            {denied && (
+              <div role="alert" className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">
+                {denied}
+              </div>
             )}
           </Row>
           <Row label="Nationality" mono>

@@ -8,6 +8,7 @@ export {
   ESCALATION_QUEUE,
   ROLES,
   ROLE_ORDER,
+  evaluateDisclosure,
   evaluatePermission,
   isRecordLocked,
   type DecisionAction,

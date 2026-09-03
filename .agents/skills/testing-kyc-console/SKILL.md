@@ -27,8 +27,8 @@ description: How to run and browser-test the KYC Review Console (Next.js) in dev
 ## Gotchas
 - `VIEWED_RECORD` is deduped only within a 2s window per (app, role); re-opening a record later legitimately adds another one.
 - Escalating/rejecting/approving as Tier-1 makes the decision final for that role (buttons disabled, checklist read-only) — use a fresh Pending record per decision type.
-- Escalate reassigns the record to `Compliance Lead queue`; the `STATUS_UPDATED` event carries `reassignedTo`. Escalated records are read-only (checklist disabled) for Tier-1; a Compliance Lead deciding one becomes its assignee.
-- Decisions go through the `authorizeDecision` server action (`PII_UNMASKED` and `STATUS_UPDATED` are emitted server-side and appear in the ledger once the action resolves — allow a short delay before asserting). A denied decision shows a red `role=alert` banner inside the modal instead of closing it.
+- Escalate reassigns the record to `Compliance Lead queue`; the `STATUS_UPDATED` event carries `reassignedTo`. Escalated records are read-only (checklist disabled, SSN *Reveal* disabled with a tooltip) for Tier-1; a Compliance Lead deciding one becomes its assignee.
+- Decisions go through the `commitDecision` server action, which reads the record's current status from the server-side store (`src/lib/data/record-store.ts`, in-memory on `globalThis` — restarting the dev server resets dispositions; a page reload does not) and commits before emitting. Confirm buttons show `Authorizing…` and are disabled while in flight. (`PII_UNMASKED` and `STATUS_UPDATED` are emitted server-side and appear in the ledger once the action resolves — allow a short delay before asserting). A denied decision shows a red `role=alert` banner inside the modal instead of closing it.
 - Hovering with a single `mouse_move` sometimes doesn't trigger the CSS `group-hover` tooltip; nudge the mouse a few px and re-hover.
 
 ## Devin Secrets Needed

@@ -9,7 +9,12 @@ export interface RoleDefinition {
   canEscalate: boolean;
   canOverrideDecision: boolean;
   canDecideEscalated: boolean;
+  /** May disclose masked applicant identifiers (SSN) on records the role can act on. */
+  canRevealPii: boolean;
 }
+
+/** The subset of a record that policy decisions depend on. */
+export type PolicySubject = Pick<Application, "status" | "risk">;
 
 export const ROLES: Record<UserRole, RoleDefinition> = {
   TIER1_ANALYST: {
@@ -21,6 +26,7 @@ export const ROLES: Record<UserRole, RoleDefinition> = {
     canEscalate: true,
     canOverrideDecision: false,
     canDecideEscalated: false,
+    canRevealPii: true,
   },
   COMPLIANCE_LEAD: {
     id: "COMPLIANCE_LEAD",
@@ -31,6 +37,7 @@ export const ROLES: Record<UserRole, RoleDefinition> = {
     canEscalate: true,
     canOverrideDecision: true,
     canDecideEscalated: true,
+    canRevealPii: true,
   },
 };
 
@@ -59,18 +66,29 @@ const FINAL_STATUSES = new Set<Application["status"]>(["Approved", "Rejected"]);
  * this role: finalized records unless the role can override, and escalated
  * records unless the role can decide them.
  */
-export function isRecordLocked(role: UserRole, app: Application): boolean {
+export function isRecordLocked(role: UserRole, app: Pick<Application, "status">): boolean {
   const def = ROLES[role];
   if (FINAL_STATUSES.has(app.status)) return !def.canOverrideDecision;
   if (app.status === "Escalated") return !def.canDecideEscalated;
   return false;
 }
 
-export function evaluatePermission(
-  role: UserRole,
-  app: Application,
-  action: DecisionAction,
-): PermissionResult {
+/** Whether the role may unmask applicant PII on this record. */
+export function evaluateDisclosure(role: UserRole, app: Pick<Application, "status">): PermissionResult {
+  if (!ROLES[role].canRevealPii) {
+    return { allowed: false, override: false, reason: "Role cannot disclose applicant identifiers." };
+  }
+  if (isRecordLocked(role, app)) {
+    return {
+      allowed: false,
+      override: false,
+      reason: `Record is ${app.status.toLowerCase()} and locked for your role; identifiers stay masked.`,
+    };
+  }
+  return { allowed: true, override: false };
+}
+
+export function evaluatePermission(role: UserRole, app: PolicySubject, action: DecisionAction): PermissionResult {
   const def = ROLES[role];
   const isFinal = FINAL_STATUSES.has(app.status);
   const isEscalated = app.status === "Escalated";

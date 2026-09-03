@@ -14,10 +14,12 @@ import { logAuditEvent, registerAuditSink } from "@/lib/audit/logger";
 import { evaluatePermission, isRecordLocked, ROLES, RoleContext, type RoleContextValue } from "@/lib/auth/rbac";
 import { buildSeedApplications, buildSeedAuditEvents } from "@/lib/data/seed";
 import {
-  authorizeDecision as authorizeDecisionAction,
+  beginReview as beginReviewAction,
+  commitDecision as commitDecisionAction,
   revealSsn as revealSsnAction,
   switchRole as switchRoleAction,
 } from "@/app/internal/kyc/actions";
+import { applySnapshots, type RecordSnapshot } from "@/lib/data/records";
 import { checklistConstraint } from "@/lib/checklist";
 import { minimizeForExport } from "@/lib/audit/export";
 import type {
@@ -102,8 +104,16 @@ interface KycContextValue {
 
 const KycContext = createContext<KycContextValue | null>(null);
 
-function buildInitialState({ seedAnchor, session }: { seedAnchor: number; session: SessionSnapshot }): KycState {
-  const applications = buildSeedApplications(seedAnchor);
+function buildInitialState({
+  seedAnchor,
+  records,
+  session,
+}: {
+  seedAnchor: number;
+  records: readonly RecordSnapshot[];
+  session: SessionSnapshot;
+}): KycState {
+  const applications = applySnapshots(buildSeedApplications(seedAnchor), records);
   return {
     operator: session.operator,
     role: session.role,
@@ -118,13 +128,16 @@ let noteSequence = 2000;
 export function KycProvider({
   children,
   seedAnchor,
+  records,
   session,
 }: {
   children: ReactNode;
   seedAnchor: number;
+  /** Server-authoritative disposition of each record at render time. */
+  records: readonly RecordSnapshot[];
   session: SessionSnapshot;
 }) {
-  const [state, dispatch] = useReducer(reducer, { seedAnchor, session }, buildInitialState);
+  const [state, dispatch] = useReducer(reducer, { seedAnchor, records, session }, buildInitialState);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -178,12 +191,13 @@ export function KycProvider({
 
   /**
    * Pending applications move to Under Review the first time an analyst
-   * touches them. Returns a pure updater; the transition is logged here so
-   * the reducer stays side-effect free.
+   * touches them. Returns a pure updater; the transition is committed to the
+   * server store and logged here so the reducer stays side-effect free.
    */
   const beginReviewIfPending = useCallback(
     (app: Application, actor: string, role: UserRole): ((a: Application) => Application) => {
       if (app.status !== "Pending") return (a) => a;
+      void beginReviewAction(app.id).catch(() => undefined);
       logAuditEvent("STATUS_UPDATED", actor, role, {
         applicationId: app.id,
         from: "Pending",
@@ -268,49 +282,42 @@ export function KycProvider({
         input.status === "Approved" ? "approve" : input.status === "Rejected" ? "reject" : "escalate";
       if (!evaluatePermission(role, app, action).allowed) return false;
 
-      const authorization = await authorizeDecisionAction({
+      const { record, event } = await commitDecisionAction({
         applicationId: id,
         status: input.status,
-        currentStatus: app.status,
         reasonCode: input.reasonCode,
       });
-      const { decidedBy, decidedAt, routedTo, event } = authorization;
-      const decisionNote: ReviewNote | null = input.note?.trim()
-        ? {
-            id: `N-${++noteSequence}`,
-            author: decidedBy,
-            role: authorization.role,
-            body: input.note.trim(),
-            createdAt: decidedAt,
-          }
-        : null;
+      dispatch({ type: "APPEND_EVENT", event });
+      const decision = record.decision;
+      const decisionNote: ReviewNote | null =
+        decision && input.note?.trim()
+          ? {
+              id: `N-${++noteSequence}`,
+              author: decision.decidedBy,
+              role: decision.role,
+              body: input.note.trim(),
+              createdAt: new Date().toISOString(),
+            }
+          : null;
       dispatch({
         type: "UPDATE_APPLICATION",
         id,
         updater: (a) => ({
           ...a,
-          status: input.status,
-          assignedReviewer: routedTo ?? (a.status === "Escalated" ? decidedBy : a.assignedReviewer ?? decidedBy),
-          decision: {
-            outcome: input.status,
-            decidedBy,
-            role: authorization.role,
-            decidedAt,
-            reasonCode: input.reasonCode,
-            override: authorization.override,
-          },
+          status: record.status,
+          assignedReviewer: record.assignedReviewer,
+          decision: record.decision,
           notes: decisionNote ? [...a.notes, decisionNote] : a.notes,
         }),
       });
       if (decisionNote) {
-        logAuditEvent("NOTE_ADDED", decidedBy, authorization.role, {
+        logAuditEvent("NOTE_ADDED", decisionNote.author, decisionNote.role, {
           applicationId: id,
           noteId: decisionNote.id,
           length: decisionNote.body.length,
           context: "decision",
         });
       }
-      dispatch({ type: "APPEND_EVENT", event });
       return true;
     },
     [getApplication],

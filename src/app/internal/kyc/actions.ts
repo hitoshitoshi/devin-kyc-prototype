@@ -2,10 +2,11 @@
 
 import "@/lib/audit/server-sink";
 import { logAuditEvent } from "@/lib/audit/logger";
-import { ESCALATION_QUEUE, evaluatePermission } from "@/lib/auth/roles";
+import { ESCALATION_QUEUE, evaluateDisclosure, evaluatePermission } from "@/lib/auth/roles";
 import { issueSession, operatorName, requireSession } from "@/lib/auth/session";
 import { lookupSsn } from "@/lib/data/pii-vault";
-import { buildSeedApplications } from "@/lib/data/seed";
+import { commitRecord, getRecord } from "@/lib/data/record-store";
+import type { RecordSnapshot } from "@/lib/data/records";
 import type { ApplicationStatus, AuditEvent, RejectionReasonCode, UserRole } from "@/lib/types";
 
 export interface RevealSsnResult {
@@ -15,13 +16,17 @@ export interface RevealSsnResult {
 }
 
 /**
- * Discloses the full tax identifier for the signed-in operator. Authority
- * comes from the session cookie, never from the caller, and the disclosure is
- * written to the audit stream before the value is returned so it cannot go
- * unrecorded if the client navigates away or fails.
+ * Discloses the full tax identifier to the signed-in operator. Authority comes
+ * from the session and the record's server-side disposition, never from the
+ * caller, and the disclosure is written to the audit stream before the value
+ * is returned so it cannot go unrecorded if the client fails afterwards.
  */
 export async function revealSsn(applicationId: string): Promise<RevealSsnResult> {
   const session = await requireSession();
+  const record = getRecord(applicationId);
+  if (!record) throw new Error(`Unknown application ${applicationId}`);
+  const disclosure = evaluateDisclosure(session.role, record);
+  if (!disclosure.allowed) throw new Error(disclosure.reason ?? "Disclosure not permitted for this role");
   const ssn = lookupSsn(applicationId);
   if (!ssn) throw new Error(`No tax identifier on file for ${applicationId}`);
   const event = logAuditEvent("PII_UNMASKED", operatorName(session), session.role, {
@@ -33,70 +38,80 @@ export async function revealSsn(applicationId: string): Promise<RevealSsnResult>
   return { ssn, event };
 }
 
+/**
+ * Moves a Pending record to Under Review and assigns it to the operator on
+ * their first review action. Idempotent; returns the authoritative snapshot.
+ */
+export async function beginReview(applicationId: string): Promise<RecordSnapshot> {
+  const session = await requireSession();
+  const record = getRecord(applicationId);
+  if (!record) throw new Error(`Unknown application ${applicationId}`);
+  if (record.status !== "Pending") return record;
+  return commitRecord({
+    ...record,
+    status: "Under Review",
+    assignedReviewer: record.assignedReviewer ?? operatorName(session),
+  });
+}
+
 export interface DecisionRequest {
   applicationId: string;
   status: Extract<ApplicationStatus, "Approved" | "Rejected" | "Escalated">;
-  /**
-   * Status the operator is deciding from. The prototype keeps review state in
-   * the browser session, so this is echoed by the client; a deployment with a
-   * record store reads it server-side instead.
-   */
-  currentStatus: ApplicationStatus;
   reasonCode?: RejectionReasonCode;
 }
 
-export interface DecisionAuthorization {
-  decidedBy: string;
-  role: UserRole;
-  decidedAt: string;
-  override: boolean;
-  /** Reviewer the record is routed to, when the decision reassigns it. */
-  routedTo: string | null;
-  /** The `STATUS_UPDATED` event recorded on the server. */
+export interface CommittedDecision {
+  /** The record as committed on the server. */
+  record: RecordSnapshot;
+  /** The `STATUS_UPDATED` event recorded for the committed transition. */
   event: AuditEvent;
 }
 
-const RECORDS: ReadonlyMap<string, ReturnType<typeof buildSeedApplications>[number]> = new Map(
-  buildSeedApplications(0).map((app) => [app.id, app]),
-);
-
 /**
- * Authorizes a decision against the signed-in operator's role and the
- * server-known risk profile of the record, then records `STATUS_UPDATED`.
- * The browser never supplies the actor or role; a forged client cannot
- * approve High risk as Tier-1, decide an escalated case, or override a final
- * decision without the role the session actually carries.
+ * Authorizes and commits a decision in one server-side step. Role and actor
+ * come from the session; the current status and risk tier come from the
+ * server-side record store — so a forged client can neither approve High risk
+ * as Tier-1 nor present an escalated or finalized record as Pending. The
+ * `STATUS_UPDATED` event is emitted only after the record has been committed.
  */
-export async function authorizeDecision(request: DecisionRequest): Promise<DecisionAuthorization> {
+export async function commitDecision(request: DecisionRequest): Promise<CommittedDecision> {
   const session = await requireSession();
-  const record = RECORDS.get(request.applicationId);
+  const record = getRecord(request.applicationId);
   if (!record) throw new Error(`Unknown application ${request.applicationId}`);
   if (request.status === "Rejected" && !request.reasonCode) throw new Error("Rejection requires a reason code");
 
   const action = request.status === "Approved" ? "approve" : request.status === "Rejected" ? "reject" : "escalate";
-  const permission = evaluatePermission(session.role, { ...record, status: request.currentStatus }, action);
+  const permission = evaluatePermission(session.role, record, action);
   if (!permission.allowed) throw new Error(permission.reason ?? "Decision not permitted for this role");
 
   const decidedBy = operatorName(session);
   const routedTo = request.status === "Escalated" ? ESCALATION_QUEUE : null;
+  const from = record.status;
+  const committed = commitRecord({
+    ...record,
+    status: request.status,
+    assignedReviewer: routedTo ?? (from === "Escalated" ? decidedBy : (record.assignedReviewer ?? decidedBy)),
+    decision: {
+      outcome: request.status,
+      decidedBy,
+      role: session.role,
+      decidedAt: new Date().toISOString(),
+      reasonCode: request.reasonCode,
+      override: permission.override,
+    },
+  });
   const event = logAuditEvent("STATUS_UPDATED", decidedBy, session.role, {
-    applicationId: record.id,
-    from: request.currentStatus,
-    to: request.status,
+    applicationId: committed.id,
+    from,
+    to: committed.status,
     ...(request.reasonCode ? { reasonCode: request.reasonCode } : {}),
     ...(permission.override ? { override: true } : {}),
-    ...(routedTo ? { reassignedTo: routedTo } : {}),
-    riskTier: record.risk.tier,
+    ...(routedTo ? { reassignedFrom: record.assignedReviewer, reassignedTo: routedTo } : {}),
+    riskTier: committed.risk.tier,
     operator: session.sub,
   });
-  return {
-    decidedBy,
-    role: session.role,
-    decidedAt: event.timestamp,
-    override: permission.override,
-    routedTo,
-    event,
-  };
+  const { id, status, assignedReviewer, decision } = committed;
+  return { record: { id, status, assignedReviewer, decision }, event };
 }
 
 /**

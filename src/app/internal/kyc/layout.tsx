@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getSession, operatorName } from "@/lib/auth/session";
+import { snapshotRecords } from "@/lib/data/record-store";
 import { KycProvider } from "@/lib/state/kyc-context";
 import { AppBar } from "@/components/kyc/app-bar";
 
@@ -13,6 +14,7 @@ export default async function KycLayout({ children }: { children: ReactNode }) {
   return (
     <KycProvider
       seedAnchor={Date.now()}
+      records={snapshotRecords()}
       session={{ operator: operatorName(session), role: session.role, grants: session.grants }}
     >
       <div className="flex h-screen flex-col overflow-hidden">

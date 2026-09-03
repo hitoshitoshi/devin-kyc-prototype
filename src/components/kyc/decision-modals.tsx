@@ -24,6 +24,8 @@ interface Props {
   override: boolean;
   onClose: () => void;
   onConfirm: (input: DecisionInput) => void;
+  /** True while a confirm is being authorized; confirmation controls are disabled. */
+  pending?: boolean;
   /** Server-side authorization failure for the last confirm attempt. */
   error?: string | null;
 }
@@ -56,7 +58,7 @@ function Summary({ app, error }: { app: Application; error?: string | null }) {
   );
 }
 
-export function DecisionModals({ app, action, override, onClose, onConfirm, error }: Props) {
+export function DecisionModals({ app, action, override, onClose, onConfirm, pending = false, error }: Props) {
   const [reason, setReason] = useState<RejectionReasonCode | null>(null);
   const [note, setNote] = useState("");
   const [step, setStep] = useState<"input" | "confirm">("input");
@@ -83,8 +85,13 @@ export function DecisionModals({ app, action, override, onClose, onConfirm, erro
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="success" onClick={() => onConfirm({ status: "Approved", note })} data-testid="confirm-approve">
-              {override ? "Override & approve" : "Approve application"}
+            <Button
+              variant="success"
+              onClick={() => onConfirm({ status: "Approved", note })}
+              disabled={pending}
+              data-testid="confirm-approve"
+            >
+              {pending ? "Authorizing…" : override ? "Override & approve" : "Approve application"}
             </Button>
           </>
         }
@@ -121,8 +128,13 @@ export function DecisionModals({ app, action, override, onClose, onConfirm, erro
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={() => onConfirm({ status: "Escalated", note })} data-testid="confirm-escalate">
-              Escalate
+            <Button
+              variant="primary"
+              onClick={() => onConfirm({ status: "Escalated", note })}
+              disabled={pending}
+              data-testid="confirm-escalate"
+            >
+              {pending ? "Authorizing…" : "Escalate"}
             </Button>
           </>
         }
@@ -215,9 +227,10 @@ export function DecisionModals({ app, action, override, onClose, onConfirm, erro
             <Button
               variant="danger"
               onClick={() => reason && onConfirm({ status: "Rejected", reasonCode: reason, note })}
+              disabled={pending}
               data-testid="confirm-reject"
             >
-              {override ? "Override & reject" : "Reject application"}
+              {pending ? "Authorizing…" : override ? "Override & reject" : "Reject application"}
             </Button>
           </>
         }
