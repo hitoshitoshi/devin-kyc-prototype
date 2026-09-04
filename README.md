@@ -37,8 +37,6 @@ Suggested walkthrough:
 5. **Reject** a record (choose a reason code, confirm) or **Escalate** one and reopen it as Tier-1 to see it locked.
 6. Open the ledger drawer and **Copy JSON**.
 
-State (statuses, notes, ledger) persists across navigation and page reloads, and resets when the dev server restarts.
-
 Checks:
 
 ```bash
